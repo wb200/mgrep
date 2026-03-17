@@ -11,7 +11,6 @@
 - Replace pattern-based grep with semantic, natural-language search
 - Index and search code, PDFs, images, and text files
 - Integrate with coding agents (Claude Code, Codex, OpenCode, Factory Droid)
-- Provide web search capabilities alongside local file search
 
 ### Tech Stack
 
@@ -173,7 +172,7 @@ Follow conventional commits: `type(scope): description`
 
 Examples:
 ```
-feat(search): add web search support
+feat(search): improve local semantic ranking
 fix(auth): handle expired token refresh
 refactor(store): extract sync logic to helper
 ```

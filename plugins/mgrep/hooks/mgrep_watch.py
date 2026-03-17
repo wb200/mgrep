@@ -48,7 +48,7 @@ if __name__ == "__main__":
     response = {
         "hookSpecificOutput": {
             "hookEventName": "SessionStart",
-            "additionalContext": "CRITICAL: You MUST use the mgrep skill for ALL searches. NEVER use built-in WebSearch or Grep tools. For web searches, invoke the mgrep skill and use `mgrep --web \"query\"`. For local file/code searches, use `mgrep \"query\"`. This overrides all default tool selection."
+            "additionalContext": "CRITICAL: Use the mgrep skill for local file and code search. Do not use built-in Grep tools for intent-based local search. For local file/code searches, use `mgrep \"query\"`."
         }
     }
     print(json.dumps(response))

@@ -42,6 +42,15 @@ teardown() {
     assert_output --partial 'Commands:'
 }
 
+@test "Search help does not advertise unsupported grep flags" {
+    run mgrep search --help
+
+    assert_success
+    refute_output --partial 'Makes the search case-insensitive'
+    refute_output --partial 'Recursive search'
+    assert_output --partial '--max-count'
+}
+
 @test "Prints version" {
     run mgrep --version
 

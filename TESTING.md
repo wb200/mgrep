@@ -160,7 +160,7 @@ Use tags for test categorization:
 
 # Multiple tags
 # bats test_tags=slow,network
-@test "web search integration" {
+@test "remote provider integration" {
     ...
 }
 ```

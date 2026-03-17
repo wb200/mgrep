@@ -8,7 +8,7 @@
   - OpenAI-compatible embeddings for `text-embedding-v4`
   - Singapore rerank endpoint for `qwen3-rerank`
 - Use LanceDB locally for both vector search and BM25 FTS.
-- Keep phase 1 text/code-only. Disable `--web`, PDF, and image ingestion explicitly.
+- Keep phase 1 text/code-only. Disable unsupported remote retrieval, PDF, and image ingestion explicitly.
 
 ## Key Changes
 
@@ -30,7 +30,7 @@
     - model `qwen3-rerank`
 - Do not use Chat Completions anywhere in the rewrite.
   - All synthesized answering and agentic planning must use Responses API only.
-  - Do not use built-in web tools from Responses API; keep retrieval local and deterministic.
+- Do not use built-in remote retrieval tools from Responses API; keep retrieval local and deterministic.
 - Implement a local LanceDB store per logical `--store`.
   - Base path from `MGREP_LANCEDB_PATH`, default `~/.mgrep/lancedb`.
   - Store-local data:
@@ -84,7 +84,7 @@
   - remove `switch-org`
   - keep `install-*` commands, but replace `ensureAuthenticated()` with `ensureConfigured()`
 - Disable unsupported backend-specific features in phase 1.
-  - `--web` returns a clear unsupported-feature error
+  - unsupported remote retrieval returns a clear unsupported-feature error
   - PDF/image files are skipped with explicit warnings
   - keep MCP/watch integration working against the local store
 
@@ -99,7 +99,7 @@
   - rerank on/off preserves output shape
   - `--answer` returns citations compatible with the existing formatter
   - `--agentic` performs bounded multi-query retrieval
-  - `--web` fails clearly
+  - unsupported remote retrieval fails clearly
   - PDF/image/binary files are skipped as expected
   - `switch-org` is absent
   - `login` validates Singapore endpoints instead of OAuth
@@ -120,7 +120,7 @@
   - the broader model-list page still says text rerank is Beijing-only
   - implementation should treat the dedicated rerank API doc as the source of truth and validate availability during `login` / config-check
 - Phase 1 intentionally excludes:
-  - web search
+  - remote internet retrieval
   - PDF/image ingestion
   - any China-region endpoint
   - any Chat Completions usage

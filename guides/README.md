@@ -1,148 +1,260 @@
-# mgrep – Practical Guide
+# mgrep Practical Guide
 
-`mgrep` is a semantic, grep‑like search tool for your local files. Instead of
-matching exact keywords, it understands your natural-language questions and
-finds relevant code, docs, and configuration across your repo.
+This guide focuses on real workflows with the current `@wb200/mgrep` fork.
 
-This guide complements the main [`README`](../README.md) by focusing on
-**practical, task-based workflows and examples**. If you just want installation
-and a quick command overview, start with the main README. If you want to see how
-to use mgrep in your day‑to‑day work, read on.
+Use the main [`README`](../README.md) for installation, command reference, and configuration details. Use this guide for examples and everyday patterns.
 
-## TL;DR
+## Before You Start
+
+Install `mgrep` and set both required provider keys:
 
 ```bash
-npm install -g @mixedbread/mgrep    # or pnpm / bun
+npm install -g @wb200/mgrep
+
+export DEEPINFRA_API_KEY=your_deepinfra_key
+export DASHSCOPE_API_KEY=your_dashscope_key
 ```
 
-### Manual usage
+Then validate:
 
 ```bash
-cd path/to/repo                     # go to the project you want to index
-mgrep watch                         # index and keep your store in sync
-
-mgrep "What code parsers are available?"  # ask questions in natural language
-mgrep -a "How is rate limiting implemented?"  # get a human and agent readable answer to the question
-mgrep "What are the results of this paper?" my-paper.pdf  # search for PDF pages
+mgrep validate
 ```
 
-### Claude Code usage
+## Core Workflow
 
-```bash
-cd path/to/repo                     # go to the project you want to index
-mgrep install-claude-code
-claude
-```
+The normal workflow is:
 
-## How it works
+1. Change into a project directory.
+2. Build or refresh the local index with `mgrep watch`.
+3. Ask semantic questions with `mgrep`.
 
-At a high level, `mgrep` works in two steps:
-
-1. **Index your files.**  
-   When you run `mgrep watch` in a repo, `mgrep`:
-   - Scans your files (respecting `.gitignore` and common build artifacts).
-   - Uploads them into a Mixedbread Store (a cloud-backed semantic index).
-   - Keeps that store up to date as files change via a file watcher.
-
-2. **Search with natural language.**  
-   When you run `mgrep "Where is the auth middleware configured?" src`, mgrep:
-   - Uses [Mixedbread Search](https://www.mixedbread.com/blog/mixedbread-search)
-     to retrieve the most semantically relevant chunks.
-   - Reranks results so that the most useful matches appear first, even if the
-     exact words you used never appear in the code.
-
-Think of it as \"grep for meaning\": you describe what you are looking for in
-plain language, and `mgrep` finds the parts of the repo that best answer that
-description.
-
-The claude code plugin will start to index the repo and keep the store in sync
-automatically. No need to run `mgrep watch` manually.
-
-### Example 1: Set up a repo for mgrep and an agent
+Example:
 
 ```bash
 cd ~/code/my-project
+mgrep watch
 
-# 1. Sign in once (or set MXBAI_API_KEY in your shell/CI)
-mgrep login
-
-# 2. Install the mgrep plugin for claude code. The mgrep plugin will start to index the repo and keep the store in sync automatically.
-mgrep install-claude-code
-
-# 3. Ask questions while you work
-mgrep "Where do we initialize the HTTP server?" src
-mgrep "How is error handling wired up in the API layer?" src/api
-```
-
-Now open your editor or Claude Code and point the agent at `~/code/my-project`.
-As you refactor, your index stays fresh automatically, so agent answers stay
-grounded in the latest version of your code. No need to run `mgrep watch`
-manually for claude code.
-
-### Example 2: Classic `grep` vs mgrep
-
-You know there is some authentication middleware, but you do not remember the exact
-symbol or file name. With classic `grep` you might try:
-
-```bash
-# Searching for any mention of "auth"
-grep -R "auth" src
-```
-
-This can be noisy, especially in large repos or where the concept you care about is
-implemented under different names.
-
-With `mgrep`, you describe what you mean instead of guessing the exact keyword:
-
-```bash
-# Search semantically within src
-mgrep "Where is the auth middleware configured?" src
-
-# Limit to the top 5 most relevant matches (the default is 10)
-mgrep -m 5 "Where is the auth middleware configured?" src
-
-# Get a human and agent readable answer to the question
-mgrep -a "Where is the auth middleware configured?" src
-```
-
-Because `mgrep` searches by meaning, it can surface files like `auth_middleware.ts`,
-`session.ts`, or `passport-setup.js` even if they never contain the literal phrase
-\"auth middleware\".
-
-### Example 3: Asking higher‑level questions
-
-Semantic search becomes even more powerful when you use it to explore architecture
-and behavior, not just symbols. For example, in a new repo you might ask:
-
-```bash
-# Explore how background jobs work
-mgrep -m 15 "How are background jobs scheduled?"
-
-# See content around the matches to skim quickly
-mgrep -c "Where do we validate user input for the signup form?"
-
-# Let mgrep summarize across results
+mgrep "Where is the auth middleware configured?"
 mgrep -a "How does rate limiting work in this service?"
 ```
 
-- `-m` controls how many results you see.  
-- `-c` prints the surrounding content for each match so you can skim without opening files.  
-- `-a` asks `mgrep` to generate an answer based on the retrieved context, which is helpful
-  when you want a narrative explanation rather than a list of matches.
+## Manual Usage Patterns
 
-### Example 4: Searching PDFs and other non-code files
-
-`mgrep` can be used to search other file types than just code. For example, you
-can search PDFs:
+### Index a project
 
 ```bash
-mgrep "What is the conclusion of the paper?" my-paper.pdf
+cd path/to/repo
+mgrep watch
 ```
 
-This will return the most relevant pages from the PDF in order of relevance.
+This performs an initial sync and then watches the current project directory for changes.
 
-## Further reading
+If you want to preview work without uploading:
 
-- Main project overview and full command list: [`../README.md`](../README.md)  
-- Mixedbread Search, the engine behind mgrep:
-  <https://www.mixedbread.com/blog/mixedbread-search>
+```bash
+mgrep watch --dry-run
+```
+
+### Search semantically
+
+```bash
+mgrep "What code parsers are available?"
+mgrep "How are chunks defined?" src/lib
+```
+
+Use this when you know the concept you want but not the exact symbol or filename.
+
+### Limit result count
+
+```bash
+mgrep -m 5 "Where is the auth middleware configured?" src
+```
+
+### Include matched content
+
+```bash
+mgrep -c "Where do we validate user input for signup?"
+```
+
+This is useful when you want to skim results without opening files immediately.
+
+### Ask for a synthesized answer
+
+```bash
+mgrep -a "How does rate limiting work in this service?"
+```
+
+This retrieves relevant local chunks, then synthesizes an answer from those results.
+
+### Use agentic search for broader questions
+
+```bash
+mgrep --agentic -a "How does authentication work and where is it configured?"
+```
+
+This asks `mgrep` to plan multiple sub-queries before retrieving and answering.
+
+### Sync before searching
+
+```bash
+mgrep --sync "Where is the API server started?"
+```
+
+This is useful when you want an up-to-date result set without starting a long-running watcher.
+
+### Preview sync changes
+
+```bash
+mgrep --sync --dry-run "search query"
+```
+
+This shows what would be uploaded or deleted before actually changing the local store.
+
+## Classic grep vs mgrep
+
+Use `grep` or `rg` when:
+
+- you know the exact symbol
+- you need exact-match refactoring support
+- you need regex-based auditing
+
+Use `mgrep` when:
+
+- you know the concept, not the exact string
+- you want architectural or behavioral discovery
+- you are onboarding to an unfamiliar codebase
+
+Example:
+
+```bash
+rg "auth" src
+mgrep "Where is the auth middleware configured?" src
+```
+
+The first is exact-string search. The second is intent-based search.
+
+## Working With Path Scopes
+
+You can narrow search to a subtree:
+
+```bash
+mgrep "How is error handling wired up?" src/api
+mgrep "How are chunks defined?" src/lib
+```
+
+This is often the simplest way to keep results focused without changing your query wording.
+
+## Working With Agent Integrations
+
+`mgrep` includes install helpers for:
+
+- Claude Code
+- Codex
+- OpenCode
+- Factory Droid
+
+Examples:
+
+```bash
+mgrep install-claude-code
+mgrep install-codex
+mgrep install-opencode
+mgrep install-droid
+```
+
+These integrations are designed around local search plus background indexing. Some of them start background sync automatically for agent sessions.
+
+## Important Limits and Behavior
+
+This fork is local-repo search only.
+
+- No web search support
+- No PDF search support
+- No image search support
+- Non-text and binary files are skipped
+
+`mgrep` is text-first and works best on code, docs, config, and other plain-text repository content.
+
+Built-in ignore patterns skip several file types by default, including:
+
+- `*.lock`
+- `*.bin`
+- `*.ipynb`
+- `*.pyc`
+- `*.safetensors`
+- `*.sqlite`
+- `*.pt`
+
+It also respects:
+
+- `.gitignore`
+- `.mgrepignore`
+- hidden files
+
+## Configuration Examples
+
+### Limit file size for indexing
+
+```bash
+mgrep watch --max-file-size 1048576
+```
+
+### Limit sync surface area
+
+```bash
+mgrep watch --max-file-count 5000
+```
+
+### Persist defaults in a local config file
+
+Create `.mgreprc.yaml`:
+
+```yaml
+maxFileSize: 5242880
+maxFileCount: 5000
+syncConcurrency: 10
+embedModel: Qwen/Qwen3-Embedding-4B
+embedDimensions: 2560
+rerankModel: Qwen/Qwen3-Reranker-4B
+llmModel: qwen3.5-plus
+```
+
+## Troubleshooting
+
+### Missing API keys
+
+```bash
+mgrep validate
+```
+
+Both `DEEPINFRA_API_KEY` and `DASHSCOPE_API_KEY` must be set.
+
+### Sync refuses to run
+
+`watch` and `search --sync` do not allow indexing the home directory or its parents.
+
+Run them from a specific project subdirectory instead.
+
+### Non-text files do not appear
+
+That is expected in the current fork. `mgrep` skips non-text and binary content.
+
+### Results feel stale
+
+Run:
+
+```bash
+mgrep watch
+```
+
+or:
+
+```bash
+mgrep --sync "your query"
+```
+
+## Further Reading
+
+- Main reference: [`../README.md`](../README.md)
+- Configuration and behavior: see the main README sections on commands, config, and troubleshooting

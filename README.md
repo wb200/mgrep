@@ -1,42 +1,47 @@
 <div align="center">
   <h1>mgrep</h1>
-  <p><em>Semantic code search powered by local LanceDB embeddings — feels as immediate as <code>grep</code>.</em></p>
+  <p><em>Local semantic code search backed by LanceDB, DeepInfra, and DashScope.</em></p>
   <a href="https://www.npmjs.com/package/@wb200/mgrep"><img src="https://badge.fury.io/js/%40wb200%2Fmgrep.svg" alt="npm version" /></a>
   <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License: Apache 2.0" /></a>
 </div>
 
 ## Why mgrep?
 
-- Natural-language search that feels as immediate as `grep`.
-- Semantic search over your local codebase — no cloud upload of source code required.
-- Smooth background indexing via `mgrep watch`, designed to detect and keep up-to-date everything that matters inside any git repository.
-- First-class coding agent integrations (Claude Code, Codex, OpenCode, Factory Droid).
-- Built for agents and humans alike: quiet output, thoughtful defaults, and escape hatches everywhere.
+- Ask your repo questions in natural language instead of guessing exact symbols.
+- Keep a local LanceDB index on disk under `~/.mgrep/lancedb/`.
+- Combine vector retrieval, full-text search, reranking, and optional answer synthesis.
+- Work directly in the CLI or wire it into coding agents.
+
+`mgrep` is for local repository search. It does not do web search in this fork.
 
 ```bash
-# index once
+# index a project
 mgrep watch
 
-# then ask your repo things in natural language
+# search semantically
 mgrep "where do we set up auth?"
+
+# synthesize an answer from retrieved local results
+mgrep -a "how does the sync pipeline work?"
 ```
 
 ## Quick Start
 
 1. **Install**
    ```bash
-   npm install -g @wb200/mgrep    # or pnpm / bun
+   npm install -g @wb200/mgrep
    ```
 
-2. **Set API keys**
+2. **Set required API keys**
    ```bash
-   export DEEPINFRA_API_KEY=your_deepinfra_key     # for embeddings & rerank
-   export DASHSCOPE_API_KEY=your_dashscope_key     # for synthesized answers
+   export DEEPINFRA_API_KEY=your_deepinfra_key
+   export DASHSCOPE_API_KEY=your_dashscope_key
    ```
-   - **DeepInfra**: Sign up at [deepinfra.com](https://deepinfra.com) — used for Qwen3 embeddings and reranking.
-   - **Alibaba Cloud DashScope (Singapore)**: Sign up at [dashscope.aliyuncs.com](https://dashscope-intl.aliyuncs.com) — used for the Responses API (answers and agentic planning). Only required if you use `--answer` or `--agentic`.
+   - `DEEPINFRA_API_KEY` is used for embeddings and reranking.
+   - `DASHSCOPE_API_KEY` is used for synthesized answers and agentic query planning.
+   - Both keys are required for normal use in this fork.
 
-3. **Validate your configuration**
+3. **Validate configuration**
    ```bash
    mgrep validate
    ```
@@ -46,243 +51,243 @@ mgrep "where do we set up auth?"
    cd path/to/repo
    mgrep watch
    ```
-   `watch` performs an initial sync, respects `.gitignore`, then keeps the local LanceDB store updated as files change.
 
-5. **Search anything**
+5. **Search**
    ```bash
-   mgrep "where do we set up auth?" src/lib
+   mgrep "where do we set up auth?"
    mgrep -m 25 "store schema"
+   mgrep -a "how is rate limiting implemented?"
    ```
-   Searches default to the current working directory unless you pass a path.
 
-## Using it with Coding Agents
+## What It Does
 
-> [!NOTE]
-> **Default Limits**: mgrep enforces default limits to ensure optimal performance:
-> - **Maximum file size**: 4MB per file
-> - **Maximum file count**: 10,000 files per directory
->
-> These limits can be customized via CLI flags (`--max-file-size`, `--max-file-count`),
-> environment variables, or config files. See the [Configuration](#configuration) section for details.
+`mgrep` keeps a local searchable index of your repository.
 
-`mgrep` supports assisted installation commands for many agents:
-- `mgrep install-claude-code` for Claude Code
-- `mgrep install-opencode` for OpenCode
-- `mgrep install-codex` for Codex
-- `mgrep install-droid` for Factory Droid
+- File discovery respects `.gitignore`, `.mgrepignore`, hidden files, and built-in ignore patterns.
+- Indexed content is chunked and stored locally in LanceDB.
+- Embeddings and reranking are done through DeepInfra.
+- Answer synthesis and agentic planning are done through DashScope.
 
-## When to use what
+This means the index itself is local, but text chunks are sent to provider APIs during embedding, reranking, and answer-generation flows.
 
-`mgrep` complements `grep`, not replaces it. The best code search combines both.
+## Commands
 
-| Use `grep` (or `ripgrep`) for... | Use `mgrep` for... |
-| --- | --- |
-| **Exact Matches** | **Intent Search** |
-| Symbol tracing, Refactoring, Regex | Code exploration, Feature discovery, Onboarding |
+Top-level commands:
 
-## mgrep as Subagent
+- `mgrep` or `mgrep search <pattern> [path]`
+- `mgrep watch`
+- `mgrep validate`
+- `mgrep install-claude-code`
+- `mgrep uninstall-claude-code`
+- `mgrep install-codex`
+- `mgrep uninstall-codex`
+- `mgrep install-opencode`
+- `mgrep uninstall-opencode`
+- `mgrep install-droid`
+- `mgrep uninstall-droid`
+- `mgrep mcp`
 
-For complex questions that require information from multiple sources, `mgrep` can act as a subagent that automatically refines queries and performs multiple searches.
+Global options:
+
+- `--store <string>`: logical store name to use, default `mgrep`
+
+### `mgrep search`
+
+`mgrep search` is the default command. It searches the current directory unless you pass a path.
+
+Arguments:
+
+- `<pattern>`: natural-language query
+- `[path]`: optional search root or scoped path
+
+Options:
+
+- `-m, --max-count <max_count>`: maximum number of results, default `10`
+- `-c, --content`: include matched chunk content in output
+- `-a, --answer`: synthesize an answer from retrieved local results
+- `-s, --sync`: sync files before searching
+- `-d, --dry-run`: preview sync work without uploading or deleting
+- `--no-rerank`: disable reranking
+- `--max-file-size <bytes>`: override upload size limit for sync
+- `--max-file-count <count>`: override sync file-count limit
+- `--agentic`: enable multi-query planning before retrieval
+
+Examples:
 
 ```bash
-# Enable agentic search for complex multi-part questions
-mgrep --agentic "What are the yearly numbers for 2020, 2021, 2022, 2023, 2024?"
-
-# Combine with --answer for a synthesized response from multiple sources
+mgrep "Where is the auth middleware configured?"
+mgrep "How are chunks defined?" src/lib
+mgrep -m 5 "maximum concurrent workers"
+mgrep -c "How does caching work?"
+mgrep -a "How is rate limiting implemented?"
 mgrep --agentic -a "How does authentication work and where is it configured?"
+mgrep --sync "Where is the API server started?"
+mgrep --sync --dry-run "search query"
 ```
 
-When `--agentic` is enabled, mgrep will:
-- Automatically break down complex queries into sub-queries
-- Perform multiple searches to gather comprehensive results
-- Combine findings from different parts of your codebase
+### `mgrep watch`
 
-## Commands at a Glance
+`mgrep watch` performs an initial sync, then keeps the current project directory in sync via file watching.
 
-| Command | Purpose |
-| --- | --- |
-| `mgrep` / `mgrep search <pattern> [path]` | Natural-language search with many `grep`-style flags (`-i`, `-r`, `-m`...). |
-| `mgrep watch` | Index current repo and keep the local store in sync via file watchers. |
-| `mgrep validate` | Validate DeepInfra and Alibaba Cloud API key configuration. |
-| `mgrep install-claude-code` | Add the mgrep MCP plugin to Claude Code. |
-| `mgrep install-opencode` | Add mgrep to OpenCode. |
-| `mgrep install-codex` | Add mgrep to Codex. |
-| `mgrep install-droid` | Add mgrep hooks/skills to Factory Droid. |
+Options:
 
-### mgrep search
+- `-d, --dry-run`: preview what would be uploaded or deleted
+- `--max-file-size <bytes>`: override upload size limit
+- `--max-file-count <count>`: override sync file-count limit
 
-`mgrep search` is the default command. It searches the current directory for a pattern.
+Examples:
 
-| Option | Description |
-| --- | --- |
-| `-m <max_count>` | The maximum number of results to return |
-| `-c`, `--content` | Show content of the results |
-| `-a`, `--answer` | Generate an answer to the question based on the results |
-| `--agentic` | Enable agentic search to automatically refine queries and perform multiple searches |
-| `-s`, `--sync` | Sync the local files to the store before searching |
-| `-d`, `--dry-run` | Dry run the search process (no actual file syncing) |
-| `--no-rerank` | Disable reranking of search results |
-| `--max-file-size <bytes>` | Maximum file size in bytes to upload (overrides config) |
-| `--max-file-count <count>` | Maximum number of files to upload (overrides config) |
-
-All search options can also be configured via environment variables (see [Environment Variables](#environment-variables) section below).
-
-**Examples:**
 ```bash
-mgrep "What code parsers are available?"          # search in the current directory
-mgrep "How are chunks defined?" src/models        # search in the src/models directory
-mgrep -m 10 "maximum concurrent workers"          # limit results to 10
-mgrep -a "What code parsers are available?"       # generate an answer based on results
-mgrep --agentic -a "How does the sync pipeline work?"   # agentic multi-query answer
+mgrep watch
+mgrep watch --dry-run
+mgrep watch --max-file-size 1048576
+mgrep watch --max-file-count 5000
 ```
 
-### mgrep watch
+### `mgrep validate`
 
-`mgrep watch` indexes the current repository and keeps the local LanceDB store in sync via file watchers.
+Validates both provider configurations by exercising embeddings, rerank, and responses.
 
-It respects the current `.gitignore`, as well as a `.mgrepignore` file in the root of the repository. The `.mgrepignore` file follows the same syntax as the [`.gitignore`](https://git-scm.com/docs/gitignore) file.
-
-| Option | Description |
-| --- | --- |
-| `-d`, `--dry-run` | Dry run the watch process (no actual file syncing) |
-| `--max-file-size <bytes>` | Maximum file size in bytes to upload (overrides config) |
-| `--max-file-count <count>` | Maximum number of files to upload (overrides config) |
-
-**Examples:**
 ```bash
-mgrep watch                           # index the current repository and watch for changes
-mgrep watch --max-file-size 1048576   # limit uploads to files under 1MB
-mgrep watch --max-file-count 5000     # limit sync to 5000 changed files or fewer
+mgrep validate
 ```
 
-## Architecture
+### Agent Install Commands
 
-- Files are chunked and embedded locally using Qwen3-Embedding via DeepInfra, then stored in a LanceDB vector database under `~/.mgrep/lancedb/`.
-- Searches combine vector similarity (ANN) and full-text search (BM25), fused with Reciprocal Rank Fusion.
-- Reranking uses Qwen3-Reranker via DeepInfra and is enabled by default (disable with `--no-rerank`).
-- Synthesized answers and agentic query planning use Alibaba Cloud DashScope (Qwen3.5-plus) via the Responses API.
-- All embeddings and indexes are stored locally — only API calls to DeepInfra/DashScope leave your machine.
+`mgrep` includes helper installers for several agent environments:
+
+- `mgrep install-claude-code`
+- `mgrep install-codex`
+- `mgrep install-opencode`
+- `mgrep install-droid`
+
+These integrations are focused on local search plus background indexing. After installation, `mgrep` warns that background sync will run automatically for supported agent flows.
+
+### `mgrep mcp`
+
+Starts the internal MCP server process used by some integrations.
+
+This command is not needed for normal CLI use.
 
 ## Configuration
 
-mgrep can be configured via config files, environment variables, or CLI flags.
+Configuration sources, highest precedence first:
+
+1. CLI flags
+2. Environment variables
+3. Local config file: `.mgreprc.yaml` or `.mgreprc.yml`
+4. Global config file: `~/.config/mgrep/config.yaml` or `~/.config/mgrep/config.yml`
+5. Built-in defaults
 
 ### Config File
 
-Create a `.mgreprc.yaml` (or `.mgreprc.yml`) in your project root for local configuration, or `~/.config/mgrep/config.yaml` (or `config.yml`) for global configuration.
+Example:
 
 ```yaml
-# Maximum file size in bytes to upload (default: 4MB)
 maxFileSize: 5242880
-
-# Maximum number of files to sync (upload/delete) per operation (default: 10000)
 maxFileCount: 5000
-
-# Concurrency for sync operations (default: 20)
 syncConcurrency: 10
-
-# Override the embedding model (default: Qwen/Qwen3-Embedding-4B)
 embedModel: Qwen/Qwen3-Embedding-4B
-
-# Embedding dimensions (default: 2560)
 embedDimensions: 2560
-
-# Override the rerank model (default: Qwen/Qwen3-Reranker-4B)
 rerankModel: Qwen/Qwen3-Reranker-4B
-
-# Override the LLM model for answers (default: qwen3.5-plus)
 llmModel: qwen3.5-plus
-
-# Custom LanceDB storage path (default: ~/.mgrep/lancedb)
 lancedbPath: /path/to/lancedb
 ```
 
-**Configuration precedence** (highest to lowest):
-1. CLI flags (`--max-file-size`, `--max-file-count`)
-2. Environment variables (`MGREP_MAX_FILE_SIZE`, `MGREP_MAX_FILE_COUNT`, …)
-3. Local config file (`.mgreprc.yaml` in project directory)
-4. Global config file (`~/.config/mgrep/config.yaml`)
-5. Default values
+Defaults:
 
-## Environment Variables
+- `maxFileSize`: `4194304` bytes
+- `maxFileCount`: `10000`
+- `syncConcurrency`: `20`
+- `lancedbPath`: `~/.mgrep/lancedb`
+- `embedModel`: `Qwen/Qwen3-Embedding-4B`
+- `embedDimensions`: `2560`
+- `rerankModel`: `Qwen/Qwen3-Reranker-4B`
+- `llmModel`: `qwen3.5-plus`
 
-### API Keys
+### Environment Variables
 
-- `DEEPINFRA_API_KEY`: DeepInfra API key for embeddings and reranking (required)
-- `DASHSCOPE_API_KEY`: Alibaba Cloud DashScope API key for responses (required for `--answer` / `--agentic`)
+Provider keys:
 
-### Store
+- `DEEPINFRA_API_KEY`
+- `DASHSCOPE_API_KEY`
 
-- `MGREP_STORE`: Override the default store name (default: `mgrep`)
-- `MGREP_LANCEDB_PATH`: Override the LanceDB storage path
+Store:
 
-### Search Options
+- `MGREP_STORE`
+- `MGREP_LANCEDB_PATH`
 
-- `MGREP_MAX_COUNT`: Maximum number of results to return (default: `10`)
-- `MGREP_CONTENT`: Show content of the results (set to `1` or `true` to enable)
-- `MGREP_ANSWER`: Generate an answer based on the results (set to `1` or `true` to enable)
-- `MGREP_AGENTIC`: Enable agentic search (set to `1` or `true` to enable)
-- `MGREP_SYNC`: Sync files before searching (set to `1` or `true` to enable)
-- `MGREP_DRY_RUN`: Enable dry run mode (set to `1` or `true` to enable)
-- `MGREP_RERANK`: Enable reranking (set to `0` or `false` to disable, default: enabled)
+Search behavior:
 
-### Sync Options
+- `MGREP_MAX_COUNT`
+- `MGREP_CONTENT`
+- `MGREP_ANSWER`
+- `MGREP_AGENTIC`
+- `MGREP_AGENT`
+- `MGREP_SYNC`
+- `MGREP_DRY_RUN`
+- `MGREP_RERANK`
 
-- `MGREP_MAX_FILE_SIZE`: Maximum file size in bytes to upload (default: `4194304` / 4MB)
-- `MGREP_MAX_FILE_COUNT`: Maximum number of files to sync per operation (default: `10000`)
-- `MGREP_SYNC_CONCURRENCY`: Concurrency for sync operations (default: `20`)
+Sync behavior:
 
-### Model Options
+- `MGREP_MAX_FILE_SIZE`
+- `MGREP_MAX_FILE_COUNT`
+- `MGREP_SYNC_CONCURRENCY`
 
-- `MGREP_EMBED_MODEL`: Embedding model to use (default: `Qwen/Qwen3-Embedding-4B`)
-- `MGREP_EMBED_DIMENSIONS`: Embedding dimensions (default: `2560`)
-- `MGREP_RERANK_MODEL`: Rerank model to use (default: `Qwen/Qwen3-Reranker-4B`)
-- `MGREP_LLM_MODEL`: LLM model for answers (default: `qwen3.5-plus`)
+Model overrides:
 
-**Examples:**
-```bash
-# Set default max results to 25
-export MGREP_MAX_COUNT=25
-mgrep "search query"
+- `MGREP_EMBED_MODEL`
+- `MGREP_EMBED_DIMENSIONS`
+- `MGREP_RERANK_MODEL`
+- `MGREP_LLM_MODEL`
 
-# Always show content in results
-export MGREP_CONTENT=1
-mgrep "search query"
+## Search Behavior and Limits
 
-# Disable reranking globally
-export MGREP_RERANK=0
-mgrep "search query"
+- `mgrep` is text-first. Non-text and binary files are skipped.
+- Built-in ignore patterns include `*.lock`, `*.bin`, `*.ipynb`, `*.pyc`, `*.safetensors`, `*.sqlite`, and `*.pt`.
+- Hidden files are ignored.
+- `watch` and `search --sync` refuse to operate on the home directory or parent directories of it.
+- Sync is bounded by `maxFileSize` and `maxFileCount`.
+
+## Output
+
+Search results are printed as:
+
+```text
+./path/to/file:line-start-line-end (score% match)
 ```
 
-Note: Command-line options always override environment variables.
+With `--content`, chunk text is included below each result.
+
+With `--answer`, `mgrep` prints the synthesized answer and the cited local source chunks it used.
+
+## Architecture
+
+- Local storage: LanceDB under `~/.mgrep/lancedb/`
+- Retrieval: vector similarity + full-text search
+- Fusion: reciprocal-rank fusion
+- Reranking: DeepInfra
+- Answer synthesis and agentic planning: DashScope Responses API
 
 ## Development
 
 ```bash
 pnpm install
-pnpm build        # TypeScript compile
-pnpm test         # bats integration tests
-pnpm format       # biome formatting + linting
-pnpm typecheck    # type-check without emitting
-```
-
-The executable lives at `dist/index.js` (built from TypeScript via `tsc`).
-
-### Testing
-
-```bash
+pnpm build
 pnpm test
+pnpm format
+pnpm typecheck
 ```
 
-Tests are written using [bats](https://bats-core.readthedocs.io/en/stable/) and use a `TestStore` in-memory backend so no real API keys are required.
+The built CLI entrypoint is `dist/index.js`.
 
 ## Troubleshooting
 
-- **API key errors**: Run `mgrep validate` to check your `DEEPINFRA_API_KEY` and `DASHSCOPE_API_KEY` are correctly set and working.
-- **Watcher feels slow**: Lower `syncConcurrency` in your config if you're hitting API rate limits, or raise it for faster initial sync on large repos.
-- **Store schema mismatch**: If you change `embedModel` or `embedDimensions`, delete the store directory (`~/.mgrep/lancedb/<store-name>/`) and re-index with `mgrep watch`.
-- **Unknown option errors**: Unrecognized flags now produce an error — check `mgrep --help` for supported options.
+- Missing API keys: run `mgrep validate`
+- Sync blocked at home directory: run from a specific project subdirectory
+- Store incompatibility after changing embedding settings: delete the affected store under `~/.mgrep/lancedb/<store-name>/` and re-index
+- Slow initial indexing: lower `syncConcurrency` if you are rate-limited, or tune file limits for very large repos
 
 ## License
 
-Apache-2.0. See the [LICENSE](https://opensource.org/licenses/Apache-2.0) file for details.
+Apache-2.0. See [LICENSE](./LICENSE).

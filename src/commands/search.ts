@@ -159,8 +159,6 @@ async function syncFiles(
 
 export const search: Command = new CommanderCommand("search")
   .description("File pattern searcher")
-  .option("-i", "Makes the search case-insensitive", false)
-  .option("-r", "Recursive search", false)
   .option(
     "-m, --max-count <max_count>",
     "The maximum number of results to return",
