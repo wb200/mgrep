@@ -1,3 +1,6 @@
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -6,6 +9,9 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { Command } from "commander";
 import { startWatch } from "./watch.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export const watchMcp = new Command("mcp")
   .description("Start MCP server for mgrep")
@@ -47,11 +53,17 @@ export const watchMcp = new Command("mcp")
       store: string;
     } = cmd.optsWithGlobals();
 
+    const packageVersion = JSON.parse(
+      fs.readFileSync(path.join(__dirname, "../../package.json"), {
+        encoding: "utf-8",
+      }),
+    ).version;
+
     const transport = new StdioServerTransport();
     const server = new Server(
       {
         name: "mgrep",
-        version: "0.1.3",
+        version: packageVersion,
       },
       {
         capabilities: {

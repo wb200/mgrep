@@ -3,8 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { program } from "commander";
-import { login } from "./commands/login.js";
-import { logout } from "./commands/logout.js";
+import { validate } from "./commands/login.js";
 import { search } from "./commands/search.js";
 import { watch } from "./commands/watch.js";
 import { watchMcp } from "./commands/watch_mcp.js";
@@ -33,7 +32,7 @@ program
   .option(
     "--store <string>",
     "The store to use",
-    process.env.MGREP_STORE || process.env.MXBAI_STORE || "mgrep",
+    process.env.MGREP_STORE || "mgrep",
   );
 
 program.addCommand(search, { isDefault: true });
@@ -46,8 +45,7 @@ program.addCommand(installDroid);
 program.addCommand(uninstallDroid);
 program.addCommand(installOpencode);
 program.addCommand(uninstallOpencode);
-program.addCommand(login);
-program.addCommand(logout);
+program.addCommand(validate);
 program.addCommand(watchMcp);
 
 program.parse();

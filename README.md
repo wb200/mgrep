@@ -1,31 +1,17 @@
 <div align="center">
-  <a href="https://github.com/mixedbread-ai/mgrep">
-    <img src="public/logo_mb.svg" alt="mgrep" width="96" height="96" />
-  </a>
   <h1>mgrep</h1>
-  <p><em>A calm, CLI-native way to semantically grep everything, like code, images, pdfs and more.</em></p>
-  <a href="https://www.npmjs.com/package/@mixedbread/mgrep"><img src="https://badge.fury.io/js/@mixedbread%2Fcli.svg" alt="npm version" /></a>
-  <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License: Apache 2.0" /></a><br>
-  <a href="https://demo.mgrep.mixedbread.com"><img src="https://img.shields.io/badge/Playground-Try%20it%20now-brightgreen" alt="Playground: Try it now" /></a>
-  <a href="https://join.slack.com/t/mixedbreadcommunity/shared_invite/zt-3kagj5m36-wwM_hryIFby7B2wlcOaHaQ"><img src="https://img.shields.io/badge/Slack-Join%20Community-4A154B?logo=slack" alt="Slack Community" /></a>
-
-  <br>
-
-  <p align="center">
-    <video src="https://github.com/user-attachments/assets/7cb6d2ab-f96b-4092-9088-abbca85b0d52" controls="controls" style="max-width: 730px;">
-      Your browser does not support the video tag.
-    </video>
-  </p>
+  <p><em>Semantic code search powered by local LanceDB embeddings — feels as immediate as <code>grep</code>.</em></p>
+  <a href="https://www.npmjs.com/package/@wb200/mgrep"><img src="https://badge.fury.io/js/%40wb200%2Fmgrep.svg" alt="npm version" /></a>
+  <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License: Apache 2.0" /></a>
 </div>
 
 ## Why mgrep?
+
 - Natural-language search that feels as immediate as `grep`.
-- Semantic, multilingual & multimodal (audio, video support coming soon!)
-- Web search built-in — query the web alongside your local files with `--web`.
+- Semantic search over your local codebase — no cloud upload of source code required.
 - Smooth background indexing via `mgrep watch`, designed to detect and keep up-to-date everything that matters inside any git repository.
-- Friendly device-login flow and first-class coding agent integrations.
-- Built for agents and humans alike, and **designed to be a helpful tool**, not a restrictive harness: quiet output, thoughtful defaults, and escape hatches everywhere.
-- Reduces the token usage of your agent by 2x while maintaining superior performance
+- First-class coding agent integrations (Claude Code, Codex, OpenCode, Factory Droid).
+- Built for agents and humans alike: quiet output, thoughtful defaults, and escape hatches everywhere.
 
 ```bash
 # index once
@@ -39,64 +25,45 @@ mgrep "where do we set up auth?"
 
 1. **Install**
    ```bash
-   npm install -g @mixedbread/mgrep    # or pnpm / bun
+   npm install -g @wb200/mgrep    # or pnpm / bun
    ```
 
-2. **Sign in once**
+2. **Set API keys**
    ```bash
-   mgrep login
+   export DEEPINFRA_API_KEY=your_deepinfra_key     # for embeddings & rerank
+   export DASHSCOPE_API_KEY=your_dashscope_key     # for synthesized answers
    ```
-   A browser window (or verification URL) guides you through Mixedbread authentication.
+   - **DeepInfra**: Sign up at [deepinfra.com](https://deepinfra.com) — used for Qwen3 embeddings and reranking.
+   - **Alibaba Cloud DashScope (Singapore)**: Sign up at [dashscope.aliyuncs.com](https://dashscope-intl.aliyuncs.com) — used for the Responses API (answers and agentic planning). Only required if you use `--answer` or `--agentic`.
 
-   **Alternative: API Key Authentication**
-   For CI/CD or headless environments, set the `MXBAI_API_KEY` environment variable:
+3. **Validate your configuration**
    ```bash
-   export MXBAI_API_KEY=your_api_key_here
+   mgrep validate
    ```
-   This bypasses the browser login flow entirely.
 
-3. **Index a project**
+4. **Index a project**
    ```bash
    cd path/to/repo
    mgrep watch
    ```
-   `watch` performs an initial sync, respects `.gitignore`, then keeps the Mixedbread store updated as files change.
+   `watch` performs an initial sync, respects `.gitignore`, then keeps the local LanceDB store updated as files change.
 
-4. **Search anything**
+5. **Search anything**
    ```bash
    mgrep "where do we set up auth?" src/lib
    mgrep -m 25 "store schema"
    ```
    Searches default to the current working directory unless you pass a path.
 
-**Today, `mgrep` works great on:** code, text, PDFs, images.  
-**Coming soon:** audio & video.
-
 ## Using it with Coding Agents
-
-> [!CAUTION]
-> **Background Sync Enabled**: When installed with a coding agent, mgrep runs a
-> background process that syncs your files to enable semantic search. This
-> process starts automatically when you begin a session and stops when your
-> session ends. You can see your current usage in the [Mixedbread
-> platform](https://www.platform.mixedbread.com/).
 
 > [!NOTE]
 > **Default Limits**: mgrep enforces default limits to ensure optimal performance:
-> - **Maximum file size**: 1MB per file
-> - **Maximum file count**: 1,000 files per directory
+> - **Maximum file size**: 4MB per file
+> - **Maximum file count**: 10,000 files per directory
 >
 > These limits can be customized via CLI flags (`--max-file-size`, `--max-file-count`),
 > environment variables, or config files. See the [Configuration](#configuration) section for details.
-
-If you prefer to manually start the file watcher instead of relying on the agent's
-automatic background sync, you can run:
-
-```bash
-mgrep watch /path/to/your/project
-```
-
-This gives you explicit control over when indexing occurs and which directories are watched.
 
 `mgrep` supports assisted installation commands for many agents:
 - `mgrep install-claude-code` for Claude Code
@@ -104,67 +71,18 @@ This gives you explicit control over when indexing occurs and which directories 
 - `mgrep install-codex` for Codex
 - `mgrep install-droid` for Factory Droid
 
-These commands sign you in (if needed) and add Mixedbread `mgrep` support to the
-agent. After that you only have to start the agent in your project folder, thats
-it.
-
-### More Agents Coming Soon
-
-More agents (Cursor, Windsurf, etc.) are on the way—this section will grow as soon as each integration lands.
-
-## Making your agent smarter
-
-We plugged `mgrep` into Claude Code and ran a benchmark of 50 QA tasks to evaluate the economics of `mgrep` against `grep`.
-
-![mgrep benchmark](public/bench.jpg)
-
-In our 50-task benchmark, `mgrep`+Claude Code used ~2x fewer tokens than grep-based workflows at similar or better judged quality.
-
-`mgrep` finds the relevant snippets in a few semantic queries first, and the model spends its capacity on reasoning instead of scanning through irrelevant code from endless `grep` attempts. You can [Try it yourself](http://demo.mgrep.mixedbread.com).
-
-*Note: Win Rate (%) was calculated by using an LLM as a judge.*
-
-## Why we built mgrep
-
-`grep` is an amazing tool. It's lightweight, compatible with just about every machine on the planet, and will reliably surface any potential match within any target folder.
-
-But grep is **from 1973**, and it carries the limitations of its era: you need exact patterns and it slows down considerably in the cases where you need it most, on large codebases.
-
-Worst of all, if you're looking for deeply-buried critical business logic, you cannot describe it: you have to be able to accurately guess what kind of naming patterns would have been used by the previous generations of engineers at your workplace for `grep` to find it. This will often result in watching a coding agent desperately try hundreds of patterns, filling its token window, and your upcoming invoice, with thousands of tokens. 
-
-But it doesn't have to be this way. Everything else in our toolkit is increasingly tailored to understand us, and so should our search tools. `mgrep` is our way to bring `grep` to 2025, integrating all of the advances in semantic understanding and code-search, without sacrificing anything that has made `grep` such a useful tool. 
-
-Under the hood, `mgrep` is powered by [Mixedbread Search](https://www.mixedbread.com/blog/mixedbread-search), our full-featured search solution. It combines state-of-the-art semantic retrieval models with context-aware parsing and optimized inference methods to provide you with a natural language companion to `grep`. We believe both tools belong in your toolkit: use `grep` for exact matches, `mgrep` for semantic understanding and intent.
-
-
 ## When to use what
 
-We designed `mgrep` to complement `grep`, not replace it. The best code search combines `mgrep` with `grep`.
+`mgrep` complements `grep`, not replaces it. The best code search combines both.
 
 | Use `grep` (or `ripgrep`) for... | Use `mgrep` for... |
 | --- | --- |
 | **Exact Matches** | **Intent Search** |
 | Symbol tracing, Refactoring, Regex | Code exploration, Feature discovery, Onboarding |
 
-## Web Search
-
-`mgrep` can also search the web alongside your local files. This is useful when
-you need to find documentation, tutorials, or answers to programming questions
-without leaving your terminal.
-
-```bash
-# Search the web and get a summarized answer
-mgrep --web --answer "How do I integrate a JavaScript runtime into Deno?"
-
-# Get the urls of the search
-mgrep --web "best practices for error handling in TypeScript"
-```
-
-Web search queries the `mixedbread/web` store in addition to your local store, merging results based on relevance. Use `--answer` (or `-a`) to get a concise summary instead of raw results.
-
 ## mgrep as Subagent
 
-For complex questions that require information from multiple sources, `mgrep` can act as a subagent that automatically refines queries and performs multiple searches to find the best answer.
+For complex questions that require information from multiple sources, `mgrep` can act as a subagent that automatically refines queries and performs multiple searches.
 
 ```bash
 # Enable agentic search for complex multi-part questions
@@ -176,34 +94,30 @@ mgrep --agentic -a "How does authentication work and where is it configured?"
 
 When `--agentic` is enabled, mgrep will:
 - Automatically break down complex queries into sub-queries
-- Perform multiple searches as needed to gather comprehensive results
+- Perform multiple searches to gather comprehensive results
 - Combine findings from different parts of your codebase
-
-This is particularly useful for questions that span multiple files or concepts, where a single search might miss important context.
 
 ## Commands at a Glance
 
 | Command | Purpose |
 | --- | --- |
 | `mgrep` / `mgrep search <pattern> [path]` | Natural-language search with many `grep`-style flags (`-i`, `-r`, `-m`...). |
-| `mgrep watch` | Index current repo and keep the Mixedbread store in sync via file watchers. |
-| `mgrep login` & `mgrep logout` | Manage device-based authentication with Mixedbread. |
-| `mgrep install-claude-code` | Authenticate, add the Mixedbread mgrep plugin to Claude Code. |
-| `mgrep install-opencode` | Authenticate and add the Mixedbread mgrep to OpenCode. |
-| `mgrep install-codex` | Authenticate and add the Mixedbread mgrep to Codex. |
-| `mgrep install-droid` | Authenticate and add the Mixedbread mgrep hooks/skills to Factory Droid. |
+| `mgrep watch` | Index current repo and keep the local store in sync via file watchers. |
+| `mgrep validate` | Validate DeepInfra and Alibaba Cloud API key configuration. |
+| `mgrep install-claude-code` | Add the mgrep MCP plugin to Claude Code. |
+| `mgrep install-opencode` | Add mgrep to OpenCode. |
+| `mgrep install-codex` | Add mgrep to Codex. |
+| `mgrep install-droid` | Add mgrep hooks/skills to Factory Droid. |
 
 ### mgrep search
 
-`mgrep search` is the default command. It can be used to search the current
-directory for a pattern.
+`mgrep search` is the default command. It searches the current directory for a pattern.
 
 | Option | Description |
 | --- | --- |
 | `-m <max_count>` | The maximum number of results to return |
 | `-c`, `--content` | Show content of the results |
 | `-a`, `--answer` | Generate an answer to the question based on the results |
-| `-w`, `--web` | Include web search results alongside local files |
 | `--agentic` | Enable agentic search to automatically refine queries and perform multiple searches |
 | `-s`, `--sync` | Sync the local files to the store before searching |
 | `-d`, `--dry-run` | Dry run the search process (no actual file syncing) |
@@ -211,26 +125,22 @@ directory for a pattern.
 | `--max-file-size <bytes>` | Maximum file size in bytes to upload (overrides config) |
 | `--max-file-count <count>` | Maximum number of files to upload (overrides config) |
 
-All search options can also be configured via environment variables (see
-[Environment Variables](#environment-variables) section below).
+All search options can also be configured via environment variables (see [Environment Variables](#environment-variables) section below).
 
 **Examples:**
 ```bash
-mgrep "What code parsers are available?"  # search in the current directory
-mgrep "How are chunks defined?" src/models  # search in the src/models directory
-mgrep -m 10 "What is the maximum number of concurrent workers in the code parser?"  # limit the number of results to 10
-mgrep -a "What code parsers are available?"  # generate an answer to the question based on the results
-mgrep --web --answer "How do I integrate a JavaScript runtime into Deno?"  # search the web and get a summarized answer
+mgrep "What code parsers are available?"          # search in the current directory
+mgrep "How are chunks defined?" src/models        # search in the src/models directory
+mgrep -m 10 "maximum concurrent workers"          # limit results to 10
+mgrep -a "What code parsers are available?"       # generate an answer based on results
+mgrep --agentic -a "How does the sync pipeline work?"   # agentic multi-query answer
 ```
 
 ### mgrep watch
 
-`mgrep watch` is used to index the current repository and keep the Mixedbread
-store in sync via file watchers.
+`mgrep watch` indexes the current repository and keeps the local LanceDB store in sync via file watchers.
 
-It respects the current `.gitignore`, as well as a `.mgrepignore` file in the
-root of the repository. The `.mgrepignore` file follows the same syntax as the
-[`.gitignore`](https://git-scm.com/docs/gitignore) file.
+It respects the current `.gitignore`, as well as a `.mgrepignore` file in the root of the repository. The `.mgrepignore` file follows the same syntax as the [`.gitignore`](https://git-scm.com/docs/gitignore) file.
 
 | Option | Description |
 | --- | --- |
@@ -240,19 +150,18 @@ root of the repository. The `.mgrepignore` file follows the same syntax as the
 
 **Examples:**
 ```bash
-mgrep watch  # index the current repository and keep the Mixedbread store in sync via file watchers
-mgrep watch --max-file-size 1048576  # limit uploads to files under 1MB
-mgrep watch --max-file-count 5000  # limit sync to 5000 changed files or fewer
+mgrep watch                           # index the current repository and watch for changes
+mgrep watch --max-file-size 1048576   # limit uploads to files under 1MB
+mgrep watch --max-file-count 5000     # limit sync to 5000 changed files or fewer
 ```
 
-## Mixedbread under the hood
+## Architecture
 
-- Every file is pushed into a Mixedbread Store using the same SDK your apps get.
-- Searches request top-k matches with Mixedbread reranking enabled by default
-  for tighter relevance (can be disabled with `--no-rerank` or
-  `MGREP_RERANK=0`).
-- Results include relative paths plus contextual hints (line ranges for text, page numbers for PDFs, etc.) for a skim-friendly experience.
-- Because stores are cloud-backed, agents and teammates can query the same corpus without re-uploading.
+- Files are chunked and embedded locally using Qwen3-Embedding via DeepInfra, then stored in a LanceDB vector database under `~/.mgrep/lancedb/`.
+- Searches combine vector similarity (ANN) and full-text search (BM25), fused with Reciprocal Rank Fusion.
+- Reranking uses Qwen3-Reranker via DeepInfra and is enabled by default (disable with `--no-rerank`).
+- Synthesized answers and agentic query planning use Alibaba Cloud DashScope (Qwen3.5-plus) via the Responses API.
+- All embeddings and indexes are stored locally — only API calls to DeepInfra/DashScope leave your machine.
 
 ## Configuration
 
@@ -263,53 +172,72 @@ mgrep can be configured via config files, environment variables, or CLI flags.
 Create a `.mgreprc.yaml` (or `.mgreprc.yml`) in your project root for local configuration, or `~/.config/mgrep/config.yaml` (or `config.yml`) for global configuration.
 
 ```yaml
-# Maximum file size in bytes to upload (default: 1MB)
+# Maximum file size in bytes to upload (default: 4MB)
 maxFileSize: 5242880
 
-# Maximum number of files to sync (upload/delete) per operation (default: 1000)
+# Maximum number of files to sync (upload/delete) per operation (default: 10000)
 maxFileCount: 5000
+
+# Concurrency for sync operations (default: 20)
+syncConcurrency: 10
+
+# Override the embedding model (default: Qwen/Qwen3-Embedding-4B)
+embedModel: Qwen/Qwen3-Embedding-4B
+
+# Embedding dimensions (default: 2560)
+embedDimensions: 2560
+
+# Override the rerank model (default: Qwen/Qwen3-Reranker-4B)
+rerankModel: Qwen/Qwen3-Reranker-4B
+
+# Override the LLM model for answers (default: qwen3.5-plus)
+llmModel: qwen3.5-plus
+
+# Custom LanceDB storage path (default: ~/.mgrep/lancedb)
+lancedbPath: /path/to/lancedb
 ```
 
 **Configuration precedence** (highest to lowest):
 1. CLI flags (`--max-file-size`, `--max-file-count`)
-2. Environment variables (`MGREP_MAX_FILE_SIZE`, `MGREP_MAX_FILE_COUNT`)
+2. Environment variables (`MGREP_MAX_FILE_SIZE`, `MGREP_MAX_FILE_COUNT`, …)
 3. Local config file (`.mgreprc.yaml` in project directory)
 4. Global config file (`~/.config/mgrep/config.yaml`)
 5. Default values
 
-### Configuration Tips
-
-- `--store <name>` lets you isolate workspaces (per repo, per team, per experiment). Stores are created on demand if they do not exist yet.
-- Ignore rules come straight from git, so temp files, build outputs, and vendored deps stay out of your embeddings.
-- `watch` reports progress (`processed / uploaded`) as it scans; leave it running in a terminal tab to keep your store fresh.
-- `search` accepts most `grep`-style switches, and politely ignores anything it cannot support, so existing muscle memory still works.
-
 ## Environment Variables
 
-All search options can be configured via environment variables, which is
-especially useful for CI/CD pipelines or when you want to set defaults for all
-searches.
+### API Keys
 
-### Authentication & Store
+- `DEEPINFRA_API_KEY`: DeepInfra API key for embeddings and reranking (required)
+- `DASHSCOPE_API_KEY`: Alibaba Cloud DashScope API key for responses (required for `--answer` / `--agentic`)
 
-- `MXBAI_API_KEY`: Set this to authenticate without browser login (ideal for CI/CD)
-- `MXBAI_STORE`: Override the default store name (default: `mgrep`)
+### Store
+
+- `MGREP_STORE`: Override the default store name (default: `mgrep`)
+- `MGREP_LANCEDB_PATH`: Override the LanceDB storage path
 
 ### Search Options
 
 - `MGREP_MAX_COUNT`: Maximum number of results to return (default: `10`)
 - `MGREP_CONTENT`: Show content of the results (set to `1` or `true` to enable)
 - `MGREP_ANSWER`: Generate an answer based on the results (set to `1` or `true` to enable)
-- `MGREP_WEB`: Include web search results (set to `1` or `true` to enable)
-- `MGREP_AGENTIC`: Enable agentic search for complex multi-source queries (set to `1` or `true` to enable)
+- `MGREP_AGENTIC`: Enable agentic search (set to `1` or `true` to enable)
 - `MGREP_SYNC`: Sync files before searching (set to `1` or `true` to enable)
 - `MGREP_DRY_RUN`: Enable dry run mode (set to `1` or `true` to enable)
-- `MGREP_RERANK`: Enable reranking of search results (set to `0` or `false` to disable, default: enabled)
+- `MGREP_RERANK`: Enable reranking (set to `0` or `false` to disable, default: enabled)
 
 ### Sync Options
 
-- `MGREP_MAX_FILE_SIZE`: Maximum file size in bytes to upload (default: `1048576` / 1MB)
-- `MGREP_MAX_FILE_COUNT`: Maximum number of files to sync per operation (default: `1000`)
+- `MGREP_MAX_FILE_SIZE`: Maximum file size in bytes to upload (default: `4194304` / 4MB)
+- `MGREP_MAX_FILE_COUNT`: Maximum number of files to sync per operation (default: `10000`)
+- `MGREP_SYNC_CONCURRENCY`: Concurrency for sync operations (default: `20`)
+
+### Model Options
+
+- `MGREP_EMBED_MODEL`: Embedding model to use (default: `Qwen/Qwen3-Embedding-4B`)
+- `MGREP_EMBED_DIMENSIONS`: Embedding dimensions (default: `2560`)
+- `MGREP_RERANK_MODEL`: Rerank model to use (default: `Qwen/Qwen3-Reranker-4B`)
+- `MGREP_LLM_MODEL`: LLM model for answers (default: `qwen3.5-plus`)
 
 **Examples:**
 ```bash
@@ -324,12 +252,6 @@ mgrep "search query"
 # Disable reranking globally
 export MGREP_RERANK=0
 mgrep "search query"
-
-# Use multiple options together
-export MGREP_MAX_COUNT=20
-export MGREP_CONTENT=1
-export MGREP_ANSWER=1
-mgrep "search query"
 ```
 
 Note: Command-line options always override environment variables.
@@ -338,15 +260,13 @@ Note: Command-line options always override environment variables.
 
 ```bash
 pnpm install
-pnpm build        # or pnpm dev for a quick compile + run
+pnpm build        # TypeScript compile
+pnpm test         # bats integration tests
 pnpm format       # biome formatting + linting
+pnpm typecheck    # type-check without emitting
 ```
 
-- The executable lives at `dist/index.js` (built from TypeScript via `tsc`).
-- Husky is wired via `pnpx husky init` (run `npx husky init` once after cloning).
-- Tests are not wired up yet—`pnpm typecheck` is your best friend before
-  publishing.
-- To connect to a local Mixedbread api set the `export NODE_ENV=development`.
+The executable lives at `dist/index.js` (built from TypeScript via `tsc`).
 
 ### Testing
 
@@ -354,17 +274,14 @@ pnpm format       # biome formatting + linting
 pnpm test
 ```
 
-The tests are written using [bats](https://bats-core.readthedocs.io/en/stable/).
+Tests are written using [bats](https://bats-core.readthedocs.io/en/stable/) and use a `TestStore` in-memory backend so no real API keys are required.
 
 ## Troubleshooting
 
-- **Login keeps reopening**: run `mgrep logout` to clear cached tokens, then try `mgrep login` again.
-- **Watcher feels noisy**: set `MXBAI_STORE` or pass `--store` to separate experiments, or pause the watcher and restart after large refactors.
-- **Need a fresh store**: delete it from the Mixedbread dashboard, then run `mgrep watch`. It will auto-create a new one.
-
-## Support
-
-For usage questions, feedback, or other support, please reach out on the [Mixedbread Slack](https://join.slack.com/t/mixedbreadcommunity/shared_invite/zt-3kagj5m36-wwM_hryIFby7B2wlcOaHaQ).
+- **API key errors**: Run `mgrep validate` to check your `DEEPINFRA_API_KEY` and `DASHSCOPE_API_KEY` are correctly set and working.
+- **Watcher feels slow**: Lower `syncConcurrency` in your config if you're hitting API rate limits, or raise it for faster initial sync on large repos.
+- **Store schema mismatch**: If you change `embedModel` or `embedDimensions`, delete the store directory (`~/.mgrep/lancedb/<store-name>/`) and re-index with `mgrep watch`.
+- **Unknown option errors**: Unrecognized flags now produce an error — check `mgrep --help` for supported options.
 
 ## License
 

@@ -12,6 +12,7 @@ const DEEPINFRA_INFERENCE_BASE_URL = "https://api.deepinfra.com/v1/inference";
 
 const EMBEDDING_BATCH_SIZE = 10;
 const DEFAULT_EMBED_DIMENSIONS = 2560;
+const API_TIMEOUT_MS = 60_000;
 
 export interface ModelStudioConfig {
   deepinfraApiKey: string;
@@ -148,11 +149,15 @@ export class ModelStudioClient {
 
     const vectors: number[][] = [];
     for (const batch of chunkArray(texts, EMBEDDING_BATCH_SIZE)) {
-      const response = await this.embeddingsClient.embeddings.create({
-        model: this.config.embedModel,
-        input: batch,
-        encoding_format: "float",
-      });
+      const response = await this.embeddingsClient.embeddings.create(
+        {
+          model: this.config.embedModel,
+          input: batch,
+          encoding_format: "float",
+          dimensions: this.config.embedDimensions,
+        },
+        { signal: AbortSignal.timeout(API_TIMEOUT_MS) },
+      );
       for (const item of response.data) {
         vectors.push(item.embedding);
       }
@@ -181,6 +186,7 @@ export class ModelStudioClient {
           queries: [query],
           documents,
         }),
+        signal: AbortSignal.timeout(API_TIMEOUT_MS),
       },
     );
 
@@ -210,6 +216,7 @@ export class ModelStudioClient {
 
     const response = (await this.responsesClient.responses.create(
       payload as never,
+      { signal: AbortSignal.timeout(API_TIMEOUT_MS) },
     )) as Response;
 
     if (response.error) {

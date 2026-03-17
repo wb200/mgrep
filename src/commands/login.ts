@@ -35,7 +35,7 @@ export async function loginAction() {
   }
 }
 
-export const login = new Command("login")
+export const validate = new Command("validate")
   .description(
     "Validate the DeepInfra and Alibaba Cloud provider configuration",
   )

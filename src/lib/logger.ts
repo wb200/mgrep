@@ -86,3 +86,12 @@ export function setupLogger() {
 
   return logger;
 }
+
+/**
+ * Writes user-facing data output directly to stdout, bypassing winston.
+ * Use this instead of console.log for search results, answers, and other
+ * data that should NOT be persisted to disk log files.
+ */
+export function output(...args: unknown[]): void {
+  process.stdout.write(`${args.join(" ")}\n`);
+}

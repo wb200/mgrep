@@ -122,7 +122,6 @@ export interface Store {
     filters?: SearchFilter,
   ): Promise<AskResponse>;
   getInfo(storeId: string): Promise<StoreInfo>;
-  refreshClient?(): Promise<void>;
 }
 
 interface StoreMeta {
@@ -234,11 +233,15 @@ function sqlString(value: string): string {
   return `'${value.replaceAll("'", "''")}'`;
 }
 
+function escapeLikeWildcards(value: string): string {
+  return value.replaceAll("%", "\\%").replaceAll("_", "\\_");
+}
+
 function prefixPredicate(prefix?: string): string | undefined {
   if (!prefix) {
     return undefined;
   }
-  return `path LIKE ${sqlString(`${prefix}%`)}`;
+  return `path LIKE ${sqlString(`${escapeLikeWildcards(prefix)}%`)}`;
 }
 
 function scoreFromDistance(distance: number | undefined): number {
@@ -291,7 +294,7 @@ function buildSourcesContext(sources: ChunkType[]): string {
   return sources
     .map((source, index) => {
       const start = source.generated_metadata.start_line + 1;
-      const end = start + source.generated_metadata.num_lines;
+      const end = start + source.generated_metadata.num_lines - 1;
       return [
         `[${index}] ${source.metadata.path}:${start}-${end}`,
         source.text,
@@ -328,13 +331,12 @@ async function readText(file: File | ReadableStream): Promise<string> {
 
 export class LanceStore implements Store {
   private connections = new Map<string, Promise<lancedb.Connection>>();
+  private ftsVerified = new Set<string>();
 
   constructor(
     private config: MgrepConfig,
     private client: ModelStudioClient,
   ) {}
-
-  async refreshClient(): Promise<void> {}
 
   private storeSlug(storeId: string): string {
     return encodeURIComponent(storeId);
@@ -483,6 +485,7 @@ export class LanceStore implements Store {
       return existing;
     }
 
+    this.ftsVerified.delete(storeId);
     const connection = await this.getConnection(storeId);
     return await connection.createTable(
       CHUNKS_TABLE,
@@ -490,7 +493,14 @@ export class LanceStore implements Store {
     );
   }
 
-  private async ensureChunkIndices(table: Table): Promise<void> {
+  private async ensureChunkIndices(
+    table: Table,
+    storeId: string,
+  ): Promise<void> {
+    if (this.ftsVerified.has(storeId)) {
+      return;
+    }
+
     const indices = await table.listIndices();
     const hasFts = indices.some(
       (index: { indexType: string; columns: string[] }) =>
@@ -506,6 +516,8 @@ export class LanceStore implements Store {
         waitTimeoutSeconds: 60,
       });
     }
+
+    this.ftsVerified.add(storeId);
   }
 
   async *listFiles(
@@ -590,7 +602,7 @@ export class LanceStore implements Store {
     const chunksTable = await this.ensureChunksTable(storeId, chunkRows);
     await chunksTable.delete(`path = ${sqlString(metadata.path)}`);
     await chunksTable.add(chunkRows as unknown as Record<string, unknown>[]);
-    await this.ensureChunkIndices(chunksTable);
+    await this.ensureChunkIndices(chunksTable, storeId);
   }
 
   async deleteFile(storeId: string, externalId: string): Promise<void> {
@@ -973,7 +985,7 @@ export class TestStore implements Store {
             text: lines[i] + rerankSuffix + agenticSuffix,
             score: 1.0,
             metadata: file.metadata,
-            chunk_index: results.length - 1,
+            chunk_index: results.length,
             generated_metadata: {
               start_line: i,
               num_lines: 1,

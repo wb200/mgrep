@@ -11,6 +11,7 @@ const ENV_PREFIX = "MGREP_";
 const DEFAULT_MAX_FILE_SIZE = 4 * 1024 * 1024;
 const DEFAULT_MAX_FILE_COUNT = 10000;
 const DEFAULT_LANCEDB_PATH = path.join(os.homedir(), ".mgrep", "lancedb");
+const DEFAULT_SYNC_CONCURRENCY = 20;
 const DEFAULT_EMBED_MODEL = "Qwen/Qwen3-Embedding-4B";
 const DEFAULT_EMBED_DIMENSIONS = 2560;
 const DEFAULT_RERANK_MODEL = "Qwen/Qwen3-Reranker-4B";
@@ -19,6 +20,7 @@ const DEFAULT_LLM_MODEL = "qwen3.5-plus";
 const ConfigSchema = z.object({
   maxFileSize: z.number().positive().optional(),
   maxFileCount: z.number().positive().optional(),
+  syncConcurrency: z.number().positive().optional(),
   lancedbPath: z.string().min(1).optional(),
   embedModel: z.string().min(1).optional(),
   embedDimensions: z.number().positive().optional(),
@@ -58,6 +60,12 @@ export interface MgrepConfig {
   lancedbPath: string;
 
   /**
+   * Maximum concurrency for sync operations.
+   * @default 20
+   */
+  syncConcurrency: number;
+
+  /**
    * The embedding model to use with DeepInfra.
    */
   embedModel: string;
@@ -81,6 +89,7 @@ export interface MgrepConfig {
 const DEFAULT_CONFIG: MgrepConfig = {
   maxFileSize: DEFAULT_MAX_FILE_SIZE,
   maxFileCount: DEFAULT_MAX_FILE_COUNT,
+  syncConcurrency: DEFAULT_SYNC_CONCURRENCY,
   lancedbPath: DEFAULT_LANCEDB_PATH,
   embedModel: DEFAULT_EMBED_MODEL,
   embedDimensions: DEFAULT_EMBED_DIMENSIONS,
@@ -161,6 +170,14 @@ function loadEnvConfig(): Partial<MgrepConfig> {
     const parsed = Number.parseInt(maxFileCountEnv, 10);
     if (!Number.isNaN(parsed) && parsed > 0) {
       config.maxFileCount = parsed;
+    }
+  }
+
+  const syncConcurrencyEnv = process.env[`${ENV_PREFIX}SYNC_CONCURRENCY`];
+  if (syncConcurrencyEnv) {
+    const parsed = Number.parseInt(syncConcurrencyEnv, 10);
+    if (!Number.isNaN(parsed) && parsed > 0) {
+      config.syncConcurrency = parsed;
     }
   }
 

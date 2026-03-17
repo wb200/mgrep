@@ -13,14 +13,6 @@ import type { InitialSyncProgress, InitialSyncResult } from "./sync-helpers.js";
 
 export const isTest = process.env.MGREP_IS_TEST === "1";
 
-/** Error thrown when the free tier quota is exceeded */
-export class QuotaExceededError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "QuotaExceededError";
-  }
-}
-
 /** Error thrown when the file count to sync exceeds the configured limit */
 export class MaxFileCountExceededError extends Error {
   constructor(filesToSync: number, maxFileCount: number) {
@@ -281,21 +273,13 @@ export async function initialSync(
   let uploaded = 0;
   let deleted = 0;
   let errors = 0;
-  let quotaExceeded = false;
-  let quotaErrorMessage = "";
 
-  const concurrency = 100;
+  const concurrency = config?.syncConcurrency ?? 20;
   const limit = pLimit(concurrency);
 
   await Promise.all([
     ...repoFiles.map((filePath) =>
       limit(async () => {
-        // Skip if quota exceeded
-        if (quotaExceeded) {
-          processed += 1;
-          return;
-        }
-
         try {
           if (config && exceedsMaxFileSize(filePath, config.maxFileSize)) {
             processed += 1;
@@ -358,22 +342,6 @@ export async function initialSync(
             filePath,
           });
         } catch (err) {
-          // Check if quota exceeded
-          if (err instanceof QuotaExceededError) {
-            quotaExceeded = true;
-            quotaErrorMessage = err.message;
-            onProgress?.({
-              processed,
-              uploaded,
-              deleted,
-              errors,
-              total,
-              filePath,
-              lastError: quotaErrorMessage,
-            });
-            return;
-          }
-
           errors += 1;
           const errorMessage = err instanceof Error ? err.message : String(err);
           onProgress?.({
@@ -390,12 +358,6 @@ export async function initialSync(
     ),
     ...filesToDelete.map((filePath) =>
       limit(async () => {
-        // Skip if quota exceeded
-        if (quotaExceeded) {
-          processed += 1;
-          return;
-        }
-
         try {
           if (dryRun) {
             console.log("Dry run: would have deleted", filePath);
@@ -429,11 +391,6 @@ export async function initialSync(
       }),
     ),
   ]);
-
-  // If quota was exceeded, throw the error after cleanup
-  if (quotaExceeded) {
-    throw new QuotaExceededError(quotaErrorMessage);
-  }
 
   return { processed, uploaded, deleted, errors, total };
 }

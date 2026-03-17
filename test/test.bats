@@ -382,13 +382,6 @@ teardown() {
     refute_output --partial 'bigger.txt'
 }
 
-@test "Search with web flag" {
-    run mgrep search --web test
-
-    assert_failure
-    assert_output --partial 'Error: --web is not supported by the local LanceDB backend in this build.'
-}
-
 @test "Config maxFileCount fails when exceeded" {
     rm "$BATS_TMPDIR/mgrep-test-store.json"
 

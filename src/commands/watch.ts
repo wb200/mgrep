@@ -4,6 +4,7 @@ import { Command, InvalidArgumentError } from "commander";
 import { type CliConfigOptions, loadConfig } from "../lib/config.js";
 import { createFileSystem, createStore } from "../lib/context.js";
 import { DEFAULT_IGNORE_PATTERNS } from "../lib/file.js";
+import { output } from "../lib/logger.js";
 import {
   createIndexingSpinner,
   formatDryRunSummary,
@@ -13,7 +14,6 @@ import {
   initialSync,
   isAtOrAboveHomeDirectory,
   MaxFileCountExceededError,
-  QuotaExceededError,
   uploadFile,
 } from "../lib/utils.js";
 
@@ -25,27 +25,8 @@ export interface WatchOptions {
 }
 
 export async function startWatch(options: WatchOptions): Promise<void> {
-  let refreshInterval: NodeJS.Timeout | undefined;
-
   try {
     const store = await createStore();
-
-    // Refresh JWT token every 5 minutes (before 15-minute expiration)
-    if (!options.dryRun) {
-      const REFRESH_INTERVAL = 5 * 60 * 1000;
-      refreshInterval = setInterval(async () => {
-        try {
-          await store.refreshClient?.();
-        } catch (err) {
-          console.error(
-            "Failed to refresh JWT token:",
-            err instanceof Error ? err.message : "Unknown error",
-          );
-        }
-      }, REFRESH_INTERVAL);
-      // Allow process to exit even if interval is active (fs.watch keeps it alive anyway)
-      refreshInterval.unref();
-    }
 
     const fileSystem = createFileSystem({
       ignorePatterns: [...DEFAULT_IGNORE_PATTERNS],
@@ -105,7 +86,7 @@ export async function startWatch(options: WatchOptions): Promise<void> {
         );
       }
       if (options.dryRun) {
-        console.log(
+        output(
           formatDryRunSummary(result, {
             actionDescription: "found",
             includeTotal: true,
@@ -114,16 +95,6 @@ export async function startWatch(options: WatchOptions): Promise<void> {
         return;
       }
     } catch (e) {
-      if (e instanceof QuotaExceededError) {
-        spinner.fail("Quota exceeded");
-        console.error(
-          "\n❌ Free tier quota exceeded. You've reached the monthly limit of 2,000,000 store tokens.",
-        );
-        console.error(
-          "   Upgrade your plan at https://platform.mixedbread.com to continue syncing.\n",
-        );
-        process.exit(1);
-      }
       if (e instanceof MaxFileCountExceededError) {
         spinner.fail("File count exceeded");
         console.error(`\n❌ ${e.message}`);
@@ -177,9 +148,6 @@ export async function startWatch(options: WatchOptions): Promise<void> {
       }
     });
   } catch (error) {
-    if (refreshInterval) {
-      clearInterval(refreshInterval);
-    }
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error("Failed to start watcher:", message);
     process.exitCode = 1;

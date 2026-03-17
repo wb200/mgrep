@@ -8,6 +8,7 @@ import {
 } from "../lib/config.js";
 import { createFileSystem, createStore } from "../lib/context.js";
 import { DEFAULT_IGNORE_PATTERNS } from "../lib/file.js";
+import { output } from "../lib/logger.js";
 import type {
   AskResponse,
   ChunkType,
@@ -23,7 +24,6 @@ import {
   initialSync,
   isAtOrAboveHomeDirectory,
   MaxFileCountExceededError,
-  QuotaExceededError,
 } from "../lib/utils.js";
 
 function extractSources(response: AskResponse): { [key: number]: ChunkType } {
@@ -86,7 +86,8 @@ function formatChunk(chunk: ChunkType, show_content: boolean) {
   const path =
     (chunk.metadata as FileMetadata)?.path?.replace(pwd, "") ?? "Unknown path";
   const start_line = (chunk.generated_metadata?.start_line as number) + 1;
-  const end_line = start_line + (chunk.generated_metadata?.num_lines as number);
+  const end_line =
+    start_line + (chunk.generated_metadata?.num_lines as number) - 1;
   const line_range = `:${start_line}-${end_line}`;
   const content = show_content ? chunk.text : "";
 
@@ -141,7 +142,7 @@ async function syncFiles(
     spinner.succeed("Indexing complete");
 
     if (dryRun) {
-      console.log(
+      output(
         formatDryRunSummary(result, {
           actionDescription: "would have indexed",
         }),
@@ -213,11 +214,6 @@ export const search: Command = new CommanderCommand("search")
     },
   )
   .option(
-    "-w, --web",
-    "Include web search results (not supported by the local LanceDB backend)",
-    parseBooleanEnv(process.env.MGREP_WEB, false),
-  )
-  .option(
     "--agentic",
     "Enable agentic search to automatically refine queries and perform multiple searches",
     parseBooleanEnv(
@@ -227,8 +223,6 @@ export const search: Command = new CommanderCommand("search")
   )
   .argument("<pattern>", "The pattern to search for")
   .argument("[path]", "The path to search in")
-  .allowUnknownOption(true)
-  .allowExcessArguments(true)
   .action(async (pattern, exec_path, _options, cmd) => {
     const options: {
       store: string;
@@ -240,7 +234,6 @@ export const search: Command = new CommanderCommand("search")
       rerank: boolean;
       maxFileSize?: number;
       maxFileCount?: number;
-      web: boolean;
       agentic: boolean;
     } = cmd.optsWithGlobals();
     if (exec_path?.startsWith("--")) {
@@ -270,14 +263,6 @@ export const search: Command = new CommanderCommand("search")
     }
 
     try {
-      if (options.web) {
-        console.error(
-          "Error: --web is not supported by the local LanceDB backend in this build.",
-        );
-        process.exitCode = 1;
-        return;
-      }
-
       const store = await createStore();
 
       if (options.sync) {
@@ -331,16 +316,9 @@ export const search: Command = new CommanderCommand("search")
         response = formatAskResponse(results, options.content);
       }
 
-      console.log(response);
+      output(response);
     } catch (error) {
-      if (error instanceof QuotaExceededError) {
-        console.error(
-          "Free tier quota exceeded. You've reached the monthly limit of 2,000,000 store tokens.",
-        );
-        console.error(
-          "   Upgrade your plan at https://platform.mixedbread.com to continue syncing.\n",
-        );
-      } else if (error instanceof MaxFileCountExceededError) {
+      if (error instanceof MaxFileCountExceededError) {
         console.error(`${error.message}`);
         console.error(
           "   Increase the limit with --max-file-count or MGREP_MAX_FILE_COUNT environment variable.\n",
