@@ -15,7 +15,7 @@ const DEFAULT_SYNC_CONCURRENCY = 20;
 const DEFAULT_EMBED_MODEL = "Qwen/Qwen3-Embedding-4B";
 const DEFAULT_EMBED_DIMENSIONS = 2560;
 const DEFAULT_RERANK_MODEL = "Qwen/Qwen3-Reranker-4B";
-const DEFAULT_LLM_MODEL = "qwen3.5-plus";
+const DEFAULT_LLM_MODEL = "MiniMaxAI/MiniMax-M2.5";
 
 const ConfigSchema = z.object({
   maxFileSize: z.number().positive().optional(),
@@ -81,7 +81,7 @@ export interface MgrepConfig {
   rerankModel: string;
 
   /**
-   * The Responses API model to use for synthesized answers and agentic planning.
+   * The DeepInfra LLM model to use for synthesized answers and agentic planning.
    */
   llmModel: string;
 }

@@ -1,13 +1,6 @@
 import OpenAI from "openai";
-import type {
-  Response,
-  ResponseCreateParamsNonStreaming,
-  ResponseOutputItem,
-} from "openai/resources/responses/responses.js";
 
 const DEEPINFRA_OPENAI_BASE_URL = "https://api.deepinfra.com/v1/openai";
-const RESPONSES_BASE_URL =
-  "https://dashscope-intl.aliyuncs.com/api/v2/apps/protocols/compatible-mode/v1";
 const DEEPINFRA_INFERENCE_BASE_URL = "https://api.deepinfra.com/v1/inference";
 
 const EMBEDDING_BATCH_SIZE = 10;
@@ -16,7 +9,6 @@ const API_TIMEOUT_MS = 60_000;
 
 export interface ModelStudioConfig {
   deepinfraApiKey: string;
-  dashscopeApiKey: string;
   embedModel: string;
   embedDimensions: number;
   rerankModel: string;
@@ -32,14 +24,6 @@ interface DeepInfraRerankResponse {
   scores?: number[];
 }
 
-type ResponseCreateParams = ResponseCreateParamsNonStreaming & {
-  enable_thinking?: boolean;
-};
-
-export function getDashscopeApiKey(): string | undefined {
-  return process.env.DASHSCOPE_API_KEY;
-}
-
 export function getDeepInfraApiKey(): string | undefined {
   return process.env.DEEPINFRA_API_KEY;
 }
@@ -53,20 +37,12 @@ export function createModelStudioConfig(options: {
   const deepinfraApiKey = getDeepInfraApiKey();
   if (!deepinfraApiKey) {
     throw new Error(
-      "DEEPINFRA_API_KEY is not set. Export a DeepInfra API key for embeddings and rerank before using mgrep.",
-    );
-  }
-
-  const dashscopeApiKey = getDashscopeApiKey();
-  if (!dashscopeApiKey) {
-    throw new Error(
-      "DASHSCOPE_API_KEY is not set. Export a Singapore Alibaba Cloud Model Studio API key for responses before using mgrep.",
+      "DEEPINFRA_API_KEY is not set. Export a DeepInfra API key for embeddings, rerank, answers, and agentic planning before using mgrep.",
     );
   }
 
   return {
     deepinfraApiKey,
-    dashscopeApiKey,
     embedModel: options.embedModel,
     embedDimensions: options.embedDimensions ?? DEFAULT_EMBED_DIMENSIONS,
     rerankModel: options.rerankModel,
@@ -92,37 +68,15 @@ function stripCodeFence(text: string): string {
   return withoutStart.replace(/\s*```$/, "").trim();
 }
 
-function extractReasoning(output: ResponseOutputItem[]): string[] {
-  const summaries: string[] = [];
-
-  for (const item of output) {
-    if (item.type !== "reasoning") {
-      continue;
-    }
-    for (const summary of item.summary) {
-      if ("text" in summary && typeof summary.text === "string") {
-        summaries.push(summary.text);
-      }
-    }
-  }
-
-  return summaries;
-}
-
 export class ModelStudioClient {
-  private embeddingsClient: OpenAI;
-  private responsesClient: OpenAI;
+  private deepinfraClient: OpenAI;
   private config: ModelStudioConfig;
 
   constructor(config: ModelStudioConfig) {
     this.config = config;
-    this.embeddingsClient = new OpenAI({
+    this.deepinfraClient = new OpenAI({
       apiKey: config.deepinfraApiKey,
       baseURL: DEEPINFRA_OPENAI_BASE_URL,
-    });
-    this.responsesClient = new OpenAI({
-      apiKey: config.dashscopeApiKey,
-      baseURL: RESPONSES_BASE_URL,
     });
   }
 
@@ -149,7 +103,7 @@ export class ModelStudioClient {
 
     const vectors: number[][] = [];
     for (const batch of chunkArray(texts, EMBEDDING_BATCH_SIZE)) {
-      const response = await this.embeddingsClient.embeddings.create(
+      const response = await this.deepinfraClient.embeddings.create(
         {
           model: this.config.embedModel,
           input: batch,
@@ -205,29 +159,26 @@ export class ModelStudioClient {
   async respond(options: {
     instructions: string;
     input: string;
-    enableThinking?: boolean;
   }): Promise<{ text: string; reasoning: string[] }> {
-    const payload: ResponseCreateParams = {
-      model: this.config.llmModel,
-      instructions: options.instructions,
-      input: options.input,
-      enable_thinking: options.enableThinking ?? true,
-    };
-
-    const response = (await this.responsesClient.responses.create(
-      payload as never,
+    const response = await this.deepinfraClient.chat.completions.create(
+      {
+        model: this.config.llmModel,
+        messages: [
+          { role: "system", content: options.instructions },
+          { role: "user", content: options.input },
+        ],
+      },
       { signal: AbortSignal.timeout(API_TIMEOUT_MS) },
-    )) as Response;
+    );
 
-    if (response.error) {
-      throw new Error(
-        response.error.message || "Responses API returned an error",
-      );
+    const text = response.choices[0]?.message?.content;
+    if (typeof text !== "string" || text.trim().length === 0) {
+      throw new Error("DeepInfra chat completions returned an empty response");
     }
 
     return {
-      text: response.output_text.trim(),
-      reasoning: extractReasoning(response.output),
+      text: text.trim(),
+      reasoning: [],
     };
   }
 
@@ -243,7 +194,6 @@ export class ModelStudioClient {
     const { text } = await this.respond({
       instructions,
       input: question,
-      enableThinking: true,
     });
 
     try {
@@ -275,7 +225,6 @@ export class ModelStudioClient {
     const { text } = await this.respond({
       instructions,
       input,
-      enableThinking: true,
     });
     return text;
   }
@@ -287,8 +236,7 @@ export class ModelStudioClient {
     ]);
     await this.respond({
       instructions: 'Reply with exactly "OK".',
-      input: "Check the Responses API configuration.",
-      enableThinking: true,
+      input: "Check the DeepInfra chat completions configuration.",
     });
   }
 }

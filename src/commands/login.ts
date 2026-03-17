@@ -25,7 +25,7 @@ export async function loginAction() {
 
     outro(
       chalk.green(
-        `Configuration looks valid. Embeddings=${config.embedModel} (${config.embedDimensions} dims), rerank=${config.rerankModel}, responses=${config.llmModel}.`,
+        `Configuration looks valid. Embeddings=${config.embedModel} (${config.embedDimensions} dims), rerank=${config.rerankModel}, llm=${config.llmModel}.`,
       ),
     );
   } catch (error) {
@@ -36,7 +36,5 @@ export async function loginAction() {
 }
 
 export const validate = new Command("validate")
-  .description(
-    "Validate the DeepInfra and Alibaba Cloud provider configuration",
-  )
+  .description("Validate the DeepInfra provider configuration")
   .action(loginAction);

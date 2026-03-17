@@ -38,7 +38,7 @@ export function printInstallWarning(
   );
   console.log(
     chalk.white(
-      "    • Sends text chunks to DeepInfra for embeddings/rerank and to Alibaba Cloud Singapore Model Studio for synthesized answers",
+      "    • Sends text chunks to DeepInfra for embeddings, rerank, synthesized answers, and agentic planning",
     ),
   );
   console.log(chalk.white("    • Stops when your session ends"));

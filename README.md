@@ -1,6 +1,6 @@
 <div align="center">
   <h1>mgrep</h1>
-  <p><em>Local semantic code search backed by LanceDB, DeepInfra, and DashScope.</em></p>
+  <p><em>Local semantic code search backed by LanceDB and DeepInfra.</em></p>
   <a href="https://www.npmjs.com/package/@wb200/mgrep"><img src="https://badge.fury.io/js/%40wb200%2Fmgrep.svg" alt="npm version" /></a>
   <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License: Apache 2.0" /></a>
 </div>
@@ -32,14 +32,12 @@ mgrep -a "how does the sync pipeline work?"
    npm install -g @wb200/mgrep
    ```
 
-2. **Set required API keys**
+2. **Set required API key**
    ```bash
    export DEEPINFRA_API_KEY=your_deepinfra_key
-   export DASHSCOPE_API_KEY=your_dashscope_key
    ```
-   - `DEEPINFRA_API_KEY` is used for embeddings and reranking.
-   - `DASHSCOPE_API_KEY` is used for synthesized answers and agentic query planning.
-   - Both keys are required for normal use in this fork.
+   - `DEEPINFRA_API_KEY` is used for embeddings, reranking, synthesized answers, and agentic query planning.
+   - It is required for normal use in this fork.
 
 3. **Validate configuration**
    ```bash
@@ -65,10 +63,9 @@ mgrep -a "how does the sync pipeline work?"
 
 - File discovery respects `.gitignore`, `.mgrepignore`, hidden files, and built-in ignore patterns.
 - Indexed content is chunked and stored locally in LanceDB.
-- Embeddings and reranking are done through DeepInfra.
-- Answer synthesis and agentic planning are done through DashScope.
+- Embeddings, reranking, answer synthesis, and agentic planning are done through DeepInfra.
 
-This means the index itself is local, but text chunks are sent to provider APIs during embedding, reranking, and answer-generation flows.
+This means the index itself is local, but text chunks are sent to DeepInfra during embedding, reranking, and answer-generation flows.
 
 ## Commands
 
@@ -333,7 +330,7 @@ mgrep watch --max-file-count 5000
 
 ### `mgrep validate`
 
-Validates both provider configurations by exercising embeddings, rerank, and responses.
+Validates the DeepInfra configuration by exercising embeddings, rerank, and chat completions.
 
 ```bash
 mgrep validate
@@ -377,7 +374,7 @@ syncConcurrency: 10
 embedModel: Qwen/Qwen3-Embedding-4B
 embedDimensions: 2560
 rerankModel: Qwen/Qwen3-Reranker-4B
-llmModel: qwen3.5-plus
+llmModel: MiniMaxAI/MiniMax-M2.5
 lancedbPath: /path/to/lancedb
 ```
 
@@ -390,14 +387,13 @@ Defaults:
 - `embedModel`: `Qwen/Qwen3-Embedding-4B`
 - `embedDimensions`: `2560`
 - `rerankModel`: `Qwen/Qwen3-Reranker-4B`
-- `llmModel`: `qwen3.5-plus`
+- `llmModel`: `MiniMaxAI/MiniMax-M2.5`
 
 ### Environment Variables
 
-Provider keys:
+Provider key:
 
 - `DEEPINFRA_API_KEY`
-- `DASHSCOPE_API_KEY`
 
 Store:
 
@@ -454,7 +450,7 @@ With `--answer`, `mgrep` prints the synthesized answer and the cited local sourc
 - Retrieval: vector similarity + full-text search
 - Fusion: reciprocal-rank fusion
 - Reranking: DeepInfra
-- Answer synthesis and agentic planning: DashScope Responses API
+- Answer synthesis and agentic planning: DeepInfra chat completions
 
 ## Development
 

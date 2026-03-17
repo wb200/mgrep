@@ -58,6 +58,28 @@ teardown() {
     assert_output --regexp '^[0-9]+\.[0-9]+\.[0-9]+$'
 }
 
+@test "Default llm model is MiniMaxAI/MiniMax-M2.5" {
+    run node --input-type=module -e "delete process.env.MGREP_LLM_MODEL; const { loadConfig } = await import('$DIR/../dist/lib/config.js'); console.log(loadConfig(process.cwd()).llmModel)"
+
+    assert_success
+    assert_output 'MiniMaxAI/MiniMax-M2.5'
+}
+
+@test "Model studio config only requires DEEPINFRA_API_KEY" {
+    run node --input-type=module -e "process.env.DEEPINFRA_API_KEY = 'test-key'; const { createModelStudioConfig } = await import('$DIR/../dist/lib/model-studio.js'); const config = createModelStudioConfig({ embedModel: 'embed', rerankModel: 'rerank', llmModel: 'llm' }); console.log(config.deepinfraApiKey); console.log(Object.keys(config).sort().join(','))"
+
+    assert_success
+    assert_output --partial 'test-key'
+    assert_output --partial 'deepinfraApiKey,embedDimensions,embedModel,llmModel,rerankModel'
+}
+
+@test "Model studio config fails when DEEPINFRA_API_KEY is missing" {
+    run node --input-type=module -e "delete process.env.DEEPINFRA_API_KEY; const { createModelStudioConfig } = await import('$DIR/../dist/lib/model-studio.js'); createModelStudioConfig({ embedModel: 'embed', rerankModel: 'rerank', llmModel: 'llm' })"
+
+    assert_failure
+    assert_output --partial 'DEEPINFRA_API_KEY is not set'
+}
+
 @test "Search" {
     run mgrep search test
 

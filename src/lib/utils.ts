@@ -7,7 +7,7 @@ import pLimit from "p-limit";
 import xxhashWasm from "xxhash-wasm";
 import { exceedsMaxFileSize, type MgrepConfig } from "./config.js";
 import type { FileSystem } from "./file.js";
-import { getDashscopeApiKey, getDeepInfraApiKey } from "./model-studio.js";
+import { getDeepInfraApiKey } from "./model-studio.js";
 import type { Store } from "./store.js";
 import type { InitialSyncProgress, InitialSyncResult } from "./sync-helpers.js";
 
@@ -156,13 +156,7 @@ export async function listStoreFileMetadata(
 export async function ensureConfigured(): Promise<void> {
   if (!getDeepInfraApiKey()) {
     throw new Error(
-      "DEEPINFRA_API_KEY is not set. Export a DeepInfra API key for embeddings and rerank before using mgrep.",
-    );
-  }
-
-  if (!getDashscopeApiKey()) {
-    throw new Error(
-      "DASHSCOPE_API_KEY is not set. Export a Singapore Alibaba Cloud Model Studio API key for responses before using mgrep.",
+      "DEEPINFRA_API_KEY is not set. Export a DeepInfra API key for embeddings, rerank, answers, and agentic planning before using mgrep.",
     );
   }
 }

@@ -6,13 +6,12 @@ Use the main [`README`](../README.md) for installation, command reference, and c
 
 ## Before You Start
 
-Install `mgrep` and set both required provider keys:
+Install `mgrep` and set the required provider key:
 
 ```bash
 npm install -g @wb200/mgrep
 
 export DEEPINFRA_API_KEY=your_deepinfra_key
-export DASHSCOPE_API_KEY=your_dashscope_key
 ```
 
 Then validate:
@@ -374,7 +373,7 @@ syncConcurrency: 10
 embedModel: Qwen/Qwen3-Embedding-4B
 embedDimensions: 2560
 rerankModel: Qwen/Qwen3-Reranker-4B
-llmModel: qwen3.5-plus
+llmModel: MiniMaxAI/MiniMax-M2.5
 ```
 
 ## Troubleshooting
@@ -385,7 +384,7 @@ llmModel: qwen3.5-plus
 mgrep validate
 ```
 
-Both `DEEPINFRA_API_KEY` and `DASHSCOPE_API_KEY` must be set.
+`DEEPINFRA_API_KEY` must be set.
 
 ### Sync refuses to run
 
