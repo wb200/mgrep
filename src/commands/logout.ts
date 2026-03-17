@@ -1,19 +1,15 @@
 import { outro } from "@clack/prompts";
 import chalk from "chalk";
 import { Command } from "commander";
-import { deleteToken, getStoredToken } from "../lib/token.js";
 
 export async function logoutAction() {
-  const token = await getStoredToken();
-  if (!token) {
-    outro(chalk.blue("You are not logged in"));
-    process.exit(0);
-  }
-
-  await deleteToken();
-  outro(chalk.green("✅ Successfully logged out"));
+  outro(
+    chalk.blue(
+      "No cloud session is stored locally. Unset DEEPINFRA_API_KEY and DASHSCOPE_API_KEY to disable provider access.",
+    ),
+  );
 }
 
 export const logout = new Command("logout")
-  .description("Logout from the Mixedbread platform")
+  .description("Show how to disable local provider access")
   .action(logoutAction);

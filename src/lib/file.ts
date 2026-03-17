@@ -5,7 +5,7 @@ import type { Git } from "./git.js";
 
 /**
  * Default glob patterns to ignore during file indexing.
- * These are not recognized as binary and also can't be uploaded to Mixedbread.
+ * These are not useful for the local text-first LanceDB index.
  */
 export const DEFAULT_IGNORE_PATTERNS: readonly string[] = [
   "*.lock",

@@ -8,12 +8,22 @@ const LOCAL_CONFIG_FILES = [".mgreprc.yaml", ".mgreprc.yml"] as const;
 const GLOBAL_CONFIG_DIR = ".config/mgrep";
 const GLOBAL_CONFIG_FILES = ["config.yaml", "config.yml"] as const;
 const ENV_PREFIX = "MGREP_";
-const DEFAULT_MAX_FILE_SIZE = 1 * 1024 * 1024;
-const DEFAULT_MAX_FILE_COUNT = 1000;
+const DEFAULT_MAX_FILE_SIZE = 4 * 1024 * 1024;
+const DEFAULT_MAX_FILE_COUNT = 10000;
+const DEFAULT_LANCEDB_PATH = path.join(os.homedir(), ".mgrep", "lancedb");
+const DEFAULT_EMBED_MODEL = "Qwen/Qwen3-Embedding-4B";
+const DEFAULT_EMBED_DIMENSIONS = 2560;
+const DEFAULT_RERANK_MODEL = "Qwen/Qwen3-Reranker-4B";
+const DEFAULT_LLM_MODEL = "qwen3.5-plus";
 
 const ConfigSchema = z.object({
   maxFileSize: z.number().positive().optional(),
   maxFileCount: z.number().positive().optional(),
+  lancedbPath: z.string().min(1).optional(),
+  embedModel: z.string().min(1).optional(),
+  embedDimensions: z.number().positive().optional(),
+  rerankModel: z.string().min(1).optional(),
+  llmModel: z.string().min(1).optional(),
 });
 
 /**
@@ -31,21 +41,51 @@ export interface MgrepConfig {
   /**
    * Maximum file size in bytes that is allowed to upload.
    * Files larger than this will be skipped during sync.
-   * @default 1048576 (1 MB)
+   * @default 4194304 (4 MiB)
    */
   maxFileSize: number;
 
   /**
    * Maximum number of files that can be synced (uploaded or deleted) in a single operation.
    * If more files need to be synced than this limit, an error will be thrown.
-   * @default 1000
+   * @default 10000
    */
   maxFileCount: number;
+
+  /**
+   * Base path for local LanceDB stores.
+   */
+  lancedbPath: string;
+
+  /**
+   * The embedding model to use with DeepInfra.
+   */
+  embedModel: string;
+
+  /**
+   * Embedding vector dimensions.
+   */
+  embedDimensions: number;
+
+  /**
+   * The rerank model to use with DeepInfra.
+   */
+  rerankModel: string;
+
+  /**
+   * The Responses API model to use for synthesized answers and agentic planning.
+   */
+  llmModel: string;
 }
 
 const DEFAULT_CONFIG: MgrepConfig = {
   maxFileSize: DEFAULT_MAX_FILE_SIZE,
   maxFileCount: DEFAULT_MAX_FILE_COUNT,
+  lancedbPath: DEFAULT_LANCEDB_PATH,
+  embedModel: DEFAULT_EMBED_MODEL,
+  embedDimensions: DEFAULT_EMBED_DIMENSIONS,
+  rerankModel: DEFAULT_RERANK_MODEL,
+  llmModel: DEFAULT_LLM_MODEL,
 };
 
 const configCache = new Map<string, MgrepConfig>();
@@ -122,6 +162,34 @@ function loadEnvConfig(): Partial<MgrepConfig> {
     if (!Number.isNaN(parsed) && parsed > 0) {
       config.maxFileCount = parsed;
     }
+  }
+
+  const lancedbPathEnv = process.env[`${ENV_PREFIX}LANCEDB_PATH`];
+  if (lancedbPathEnv) {
+    config.lancedbPath = lancedbPathEnv;
+  }
+
+  const embedModelEnv = process.env[`${ENV_PREFIX}EMBED_MODEL`];
+  if (embedModelEnv) {
+    config.embedModel = embedModelEnv;
+  }
+
+  const embedDimensionsEnv = process.env[`${ENV_PREFIX}EMBED_DIMENSIONS`];
+  if (embedDimensionsEnv) {
+    const parsed = Number.parseInt(embedDimensionsEnv, 10);
+    if (!Number.isNaN(parsed) && parsed > 0) {
+      config.embedDimensions = parsed;
+    }
+  }
+
+  const rerankModelEnv = process.env[`${ENV_PREFIX}RERANK_MODEL`];
+  if (rerankModelEnv) {
+    config.rerankModel = rerankModelEnv;
+  }
+
+  const llmModelEnv = process.env[`${ENV_PREFIX}LLM_MODEL`];
+  if (llmModelEnv) {
+    config.llmModel = llmModelEnv;
   }
 
   return config;

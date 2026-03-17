@@ -80,49 +80,15 @@ function formatSearchResponse(response: SearchResponse, show_content: boolean) {
     .join("\n");
 }
 
-function isWebResult(chunk: ChunkType): boolean {
-  return (
-    "filename" in chunk &&
-    typeof chunk.filename === "string" &&
-    chunk.filename.startsWith("http")
-  );
-}
-
 function formatChunk(chunk: ChunkType, show_content: boolean) {
   const pwd = process.cwd();
 
-  if (isWebResult(chunk) && chunk.type === "text") {
-    const url = "filename" in chunk ? chunk.filename : "Unknown URL";
-    const content = show_content ? chunk.text : "";
-    return `${url} (${(chunk.score * 100).toFixed(2)}% match)${content ? `\n${content}` : ""}`;
-  }
-
   const path =
     (chunk.metadata as FileMetadata)?.path?.replace(pwd, "") ?? "Unknown path";
-  let line_range = "";
-  let content = "";
-  switch (chunk.type) {
-    case "text": {
-      const start_line = (chunk.generated_metadata?.start_line as number) + 1;
-      const end_line =
-        start_line + (chunk.generated_metadata?.num_lines as number);
-      line_range = `:${start_line}-${end_line}`;
-      content = show_content ? chunk.text : "";
-      break;
-    }
-    case "image_url":
-      line_range =
-        chunk.generated_metadata?.type === "pdf"
-          ? `, page ${chunk.chunk_index + 1}`
-          : "";
-      break;
-    case "audio_url":
-      line_range = "";
-      break;
-    case "video_url":
-      line_range = "";
-      break;
-  }
+  const start_line = (chunk.generated_metadata?.start_line as number) + 1;
+  const end_line = start_line + (chunk.generated_metadata?.num_lines as number);
+  const line_range = `:${start_line}-${end_line}`;
+  const content = show_content ? chunk.text : "";
 
   return `.${path}${line_range} (${(chunk.score * 100).toFixed(2)}% match)${content ? `\n${content}` : ""}`;
 }
@@ -248,13 +214,16 @@ export const search: Command = new CommanderCommand("search")
   )
   .option(
     "-w, --web",
-    "Include web search results from mixedbread/web store",
+    "Include web search results (not supported by the local LanceDB backend)",
     parseBooleanEnv(process.env.MGREP_WEB, false),
   )
   .option(
     "--agentic",
     "Enable agentic search to automatically refine queries and perform multiple searches",
-    parseBooleanEnv(process.env.MGREP_AGENTIC, false),
+    parseBooleanEnv(
+      process.env.MGREP_AGENTIC ?? process.env.MGREP_AGENT,
+      false,
+    ),
   )
   .argument("<pattern>", "The pattern to search for")
   .argument("[path]", "The path to search in")
@@ -301,6 +270,14 @@ export const search: Command = new CommanderCommand("search")
     }
 
     try {
+      if (options.web) {
+        console.error(
+          "Error: --web is not supported by the local LanceDB backend in this build.",
+        );
+        process.exitCode = 1;
+        return;
+      }
+
       const store = await createStore();
 
       if (options.sync) {
@@ -316,9 +293,7 @@ export const search: Command = new CommanderCommand("search")
         }
       }
 
-      const storeIds = options.web
-        ? [options.store, "mixedbread/web"]
-        : [options.store];
+      const storeIds = [options.store];
 
       const filters = {
         all: [

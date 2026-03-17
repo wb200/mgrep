@@ -33,7 +33,12 @@ export function printInstallWarning(
   console.log(chalk.white("    • Indexes files in your working directory"));
   console.log(
     chalk.white(
-      "    • Syncs file content to mixedbread's servers for embedding (this creates usage on the mixedbread platform)",
+      "    • Builds a local LanceDB index in your working directory metadata store",
+    ),
+  );
+  console.log(
+    chalk.white(
+      "    • Sends text chunks to DeepInfra for embeddings/rerank and to Alibaba Cloud Singapore Model Studio for synthesized answers",
     ),
   );
   console.log(chalk.white("    • Stops when your session ends"));

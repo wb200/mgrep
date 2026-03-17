@@ -2,17 +2,14 @@ import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { cancel, confirm, isCancel } from "@clack/prompts";
 import { isText } from "istextorbinary";
 import pLimit from "p-limit";
 import xxhashWasm from "xxhash-wasm";
-import { loginAction } from "../commands/login.js";
 import { exceedsMaxFileSize, type MgrepConfig } from "./config.js";
 import type { FileSystem } from "./file.js";
+import { getDashscopeApiKey, getDeepInfraApiKey } from "./model-studio.js";
 import type { Store } from "./store.js";
 import type { InitialSyncProgress, InitialSyncResult } from "./sync-helpers.js";
-
-import { getStoredToken } from "./token.js";
 
 export const isTest = process.env.MGREP_IS_TEST === "1";
 
@@ -32,15 +29,6 @@ export class MaxFileCountExceededError extends Error {
     );
     this.name = "MaxFileCountExceededError";
   }
-}
-
-/** Check if an error message indicates a quota issue */
-function isQuotaError(errorMessage: string): boolean {
-  return (
-    errorMessage.includes("Free tier") ||
-    errorMessage.includes("quota") ||
-    errorMessage.includes("Upgrade your plan")
-  );
 }
 
 function isSubpath(parent: string, child: string): boolean {
@@ -173,30 +161,21 @@ export async function listStoreFileMetadata(
   return byExternalId;
 }
 
-export async function ensureAuthenticated(): Promise<void> {
-  // Check if API key is set via environment variable
-  if (process.env.MXBAI_API_KEY) {
-    return;
+export async function ensureConfigured(): Promise<void> {
+  if (!getDeepInfraApiKey()) {
+    throw new Error(
+      "DEEPINFRA_API_KEY is not set. Export a DeepInfra API key for embeddings and rerank before using mgrep.",
+    );
   }
 
-  // Check for stored OAuth token
-  const token = await getStoredToken();
-  if (token) {
-    return;
+  if (!getDashscopeApiKey()) {
+    throw new Error(
+      "DASHSCOPE_API_KEY is not set. Export a Singapore Alibaba Cloud Model Studio API key for responses before using mgrep.",
+    );
   }
-
-  const shouldLogin = await confirm({
-    message: "You are not logged in. Would you like to login now?",
-    initialValue: true,
-  });
-
-  if (isCancel(shouldLogin) || !shouldLogin) {
-    cancel("Operation cancelled");
-    process.exit(0);
-  }
-
-  await loginAction();
 }
+
+export const ensureAuthenticated = ensureConfigured;
 
 export async function deleteFile(
   store: Store,
@@ -225,6 +204,10 @@ export async function uploadFile(
     return false;
   }
 
+  if (!isText(filePath)) {
+    return false;
+  }
+
   const hash = await computeBufferHash(buffer);
   const options = {
     external_id: filePath,
@@ -236,42 +219,11 @@ export async function uploadFile(
     },
   };
 
-  try {
-    await store.uploadFile(
-      storeId,
-      fs.createReadStream(filePath) as unknown as File | ReadableStream,
-      options,
-    );
-  } catch (streamErr) {
-    const streamErrMsg =
-      streamErr instanceof Error ? streamErr.message : String(streamErr);
-
-    // Check for quota errors and throw immediately to stop processing
-    if (isQuotaError(streamErrMsg)) {
-      throw new QuotaExceededError(streamErrMsg);
-    }
-
-    if (!isText(filePath)) {
-      return false;
-    }
-    try {
-      await store.uploadFile(
-        storeId,
-        new File([buffer], fileName, { type: "text/plain" }),
-        options,
-      );
-    } catch (fileErr) {
-      const fileErrMsg =
-        fileErr instanceof Error ? fileErr.message : String(fileErr);
-
-      // Check for quota errors and throw immediately to stop processing
-      if (isQuotaError(fileErrMsg)) {
-        throw new QuotaExceededError(fileErrMsg);
-      }
-
-      throw fileErr;
-    }
-  }
+  await store.uploadFile(
+    storeId,
+    new File([buffer], fileName, { type: "text/plain" }),
+    options,
+  );
   return true;
 }
 

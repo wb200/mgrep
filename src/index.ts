@@ -6,7 +6,6 @@ import { program } from "commander";
 import { login } from "./commands/login.js";
 import { logout } from "./commands/logout.js";
 import { search } from "./commands/search.js";
-import { switchOrg } from "./commands/switch-org.js";
 import { watch } from "./commands/watch.js";
 import { watchMcp } from "./commands/watch_mcp.js";
 import {
@@ -34,7 +33,7 @@ program
   .option(
     "--store <string>",
     "The store to use",
-    process.env.MXBAI_STORE || "mgrep",
+    process.env.MGREP_STORE || process.env.MXBAI_STORE || "mgrep",
   );
 
 program.addCommand(search, { isDefault: true });
@@ -49,7 +48,6 @@ program.addCommand(installOpencode);
 program.addCommand(uninstallOpencode);
 program.addCommand(login);
 program.addCommand(logout);
-program.addCommand(switchOrg);
 program.addCommand(watchMcp);
 
 program.parse();

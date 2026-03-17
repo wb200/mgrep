@@ -1,7 +1,7 @@
 #!/bin/bash
 
 setup_file() {
-  pnpm build
+  corepack pnpm build
 }
 
 setup() {
@@ -385,8 +385,8 @@ teardown() {
 @test "Search with web flag" {
     run mgrep search --web test
 
-    assert_success
-    assert_output --partial 'test.txt'
+    assert_failure
+    assert_output --partial 'Error: --web is not supported by the local LanceDB backend in this build.'
 }
 
 @test "Config maxFileCount fails when exceeded" {

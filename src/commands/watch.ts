@@ -77,8 +77,7 @@ export async function startWatch(options: WatchOptions): Promise<void> {
       } catch {
         await store.create({
           name: options.store,
-          description:
-            "mgrep store - Mixedbreads multimodal multilingual magic search",
+          description: "mgrep local LanceDB store",
         });
       }
       const result = await initialSync(

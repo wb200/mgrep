@@ -1,39 +1,33 @@
-import Mixedbread from "@mixedbread/sdk";
-import { getJWTToken } from "./auth.js";
+import { loadConfig } from "./config.js";
 import {
   type FileSystem,
   type FileSystemOptions,
   NodeFileSystem,
 } from "./file.js";
 import { type Git, NodeGit } from "./git.js";
-import { MixedbreadStore, type Store, TestStore } from "./store.js";
-import { ensureAuthenticated, isDevelopment, isTest } from "./utils.js";
-
-const BASE_URL = isDevelopment()
-  ? "http://localhost:8000"
-  : "https://api.mixedbread.com";
+import { createModelStudioConfig, ModelStudioClient } from "./model-studio.js";
+import { LanceStore, type Store, TestStore } from "./store.js";
+import { isTest } from "./utils.js";
 
 /**
- * Creates an authenticated Store instance
- * Supports authentication via MXBAI_API_KEY env var or OAuth token
+ * Creates a configured Store instance.
  */
 export async function createStore(): Promise<Store> {
   if (isTest) {
     return new TestStore();
   }
 
-  await ensureAuthenticated();
+  const config = loadConfig(process.cwd());
+  const client = new ModelStudioClient(
+    createModelStudioConfig({
+      embedModel: config.embedModel,
+      embedDimensions: config.embedDimensions,
+      rerankModel: config.rerankModel,
+      llmModel: config.llmModel,
+    }),
+  );
 
-  async function createClient() {
-    const jwtToken = await getJWTToken();
-    return new Mixedbread({
-      baseURL: BASE_URL,
-      apiKey: jwtToken,
-    });
-  }
-
-  const client = await createClient();
-  return new MixedbreadStore(client, createClient);
+  return new LanceStore(config, client);
 }
 
 /**
