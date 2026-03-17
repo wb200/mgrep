@@ -9,7 +9,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "github:wb200/mgrep"
+    "url": "git+https://github.com/wb200/mgrep.git"
   },
   "main": "dist/index.js",
   "bin": {
