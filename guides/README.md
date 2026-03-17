@@ -111,6 +111,163 @@ mgrep --sync --dry-run "search query"
 
 This shows what would be uploaded or deleted before actually changing the local store.
 
+## Understanding Stores In Practice
+
+The `--store` flag chooses the logical index name that `mgrep` uses.
+
+This matters a lot once you start indexing more than one folder.
+
+### Default behavior
+
+If you do nothing, `mgrep` uses the default store:
+
+```bash
+mgrep
+```
+
+So:
+
+```bash
+mgrep watch
+```
+
+really means:
+
+```bash
+mgrep --store mgrep watch
+```
+
+and:
+
+```bash
+mgrep "query"
+```
+
+really means:
+
+```bash
+mgrep --store mgrep "query"
+```
+
+You can change that shell-wide with:
+
+```bash
+export MGREP_STORE=my-store
+```
+
+### Important consequence
+
+If you indexed with a custom store name:
+
+```bash
+cd /home/wb200/.factory/specs
+mgrep --store factory-specs watch
+```
+
+then later run:
+
+```bash
+mgrep "query"
+```
+
+you are **not** searching `factory-specs`.
+
+You are searching the default store `mgrep`.
+
+To search the index you created, do this instead:
+
+```bash
+mgrep --store factory-specs "query"
+```
+
+### One command, one store
+
+`mgrep` does not search across all stores automatically.
+
+Each invocation searches exactly one store:
+
+- `--store ...`
+- or `MGREP_STORE`
+- or the default `mgrep`
+
+### Additive multi-folder indexing
+
+If you watch two different folders using the same store name, the contents combine additively.
+
+Example:
+
+```bash
+cd ~/code/project-a
+mgrep --store shared watch
+
+cd ~/code/project-b
+mgrep --store shared watch
+```
+
+Now store `shared` contains both:
+
+- `~/code/project-a/...`
+- `~/code/project-b/...`
+
+The second watch does not wipe the first.
+
+### Why that works
+
+Sync deletion is scoped only to the folder subtree being watched or synced.
+
+So if you remove a file under `project-a`, syncing `project-a` removes that stale entry.
+But syncing `project-a` does not delete `project-b` from the same store.
+
+### Current directory still matters
+
+Even within a shared store, search is path-scoped.
+
+If you run:
+
+```bash
+cd ~/code/project-a
+mgrep --store shared "auth middleware"
+```
+
+you search store `shared`, but results are filtered to the current folder path.
+
+You can also target another subtree explicitly:
+
+```bash
+mgrep --store shared "auth middleware" ~/code/project-b
+```
+
+### Recommended patterns
+
+For most users, one store per project is the least confusing:
+
+```bash
+cd ~/code/project-a
+mgrep --store project-a watch
+
+cd ~/code/project-b
+mgrep --store project-b watch
+```
+
+Then search using the same store:
+
+```bash
+mgrep --store project-a "query"
+mgrep --store project-b "query"
+```
+
+If you intentionally want one combined index across multiple roots, reuse the same store name on purpose:
+
+```bash
+cd ~/notes
+mgrep --store personal watch
+
+cd ~/specs
+mgrep --store personal watch
+```
+
+That creates one shared logical index named `personal`.
+
 ## Classic grep vs mgrep
 
 Use `grep` or `rg` when:

@@ -91,6 +91,193 @@ Global options:
 
 - `--store <string>`: logical store name to use, default `mgrep`
 
+## Understanding Stores
+
+The `--store` flag controls **which logical index** `mgrep` reads from and writes to.
+
+This is one of the most important things to understand when using `mgrep` across multiple folders.
+
+### The default store name
+
+If you do not pass `--store`, `mgrep` always uses the store named:
+
+```bash
+mgrep
+```
+
+That means these are equivalent:
+
+```bash
+mgrep watch
+mgrep --store mgrep watch
+```
+
+and:
+
+```bash
+mgrep "query"
+mgrep --store mgrep "query"
+```
+
+You can also change the default for a shell session with:
+
+```bash
+export MGREP_STORE=my-store
+```
+
+After that, plain `mgrep ...` commands in that shell use `my-store` unless you override them with `--store`.
+
+### One command searches exactly one store
+
+`mgrep` does **not** search all stores automatically.
+
+Each command uses exactly one logical store:
+
+- `--store some-name`
+- or `MGREP_STORE`
+- or the built-in default `mgrep`
+
+So if you indexed a folder with:
+
+```bash
+mgrep --store factory-specs watch
+```
+
+and later run:
+
+```bash
+mgrep "query"
+```
+
+you are **not** searching `factory-specs`. You are searching the default store `mgrep`.
+
+To search the store you indexed, you must use:
+
+```bash
+mgrep --store factory-specs "query"
+```
+
+or:
+
+```bash
+export MGREP_STORE=factory-specs
+mgrep "query"
+```
+
+### What `watch` indexes
+
+`mgrep watch` indexes:
+
+- the current working directory
+- all subdirectories under it
+- only files that survive `.gitignore`, `.mgrepignore`, hidden-file filtering, built-in ignore patterns, and text-file detection
+
+So this:
+
+```bash
+cd /path/to/project
+mgrep --store my-project watch
+```
+
+indexes `/path/to/project` and all of its eligible subfolders into store `my-project`.
+
+### Stores are additive across multiple folders
+
+If you run `watch` in two different folders with the **same** store name, the index is additive.
+
+Example:
+
+```bash
+cd /path/project-a
+mgrep --store shared watch
+
+cd /path/project-b
+mgrep --store shared watch
+```
+
+After that, store `shared` contains indexed content for both:
+
+- `/path/project-a/...`
+- `/path/project-b/...`
+
+The second `watch` does **not** wipe the first one.
+
+### Deletions are scoped to the watched folder
+
+When `watch` or `search --sync` removes stale entries, it only deletes files inside the current folder subtree being synced.
+
+That means if `project-a` and `project-b` both live in store `shared`:
+
+- syncing `project-a` can remove stale entries from `project-a`
+- syncing `project-a` does **not** remove `project-b`
+
+This is what makes additive multi-root stores possible.
+
+### Search is store-scoped and path-scoped
+
+Search always works in two layers:
+
+1. it selects a single store
+2. it filters results to the current directory or the path argument you pass
+
+So if you are inside `project-a` and search against a shared store, `mgrep` still scopes results to your current path by default.
+
+Examples:
+
+```bash
+cd /path/project-a
+mgrep --store shared "auth middleware"
+```
+
+searches store `shared`, but only for content under `/path/project-a/...`.
+
+And:
+
+```bash
+mgrep --store shared "auth middleware" /path/project-b
+```
+
+searches the same shared store, but only under `/path/project-b/...`.
+
+### Recommended usage patterns
+
+**One store per project** is the easiest model to reason about:
+
+```bash
+cd ~/code/project-a
+mgrep --store project-a watch
+
+cd ~/code/project-b
+mgrep --store project-b watch
+```
+
+Then search with the matching store name:
+
+```bash
+mgrep --store project-a "query"
+mgrep --store project-b "query"
+```
+
+**Shared store across multiple roots** is also supported if you want it intentionally:
+
+```bash
+cd ~/notes
+mgrep --store personal watch
+
+cd ~/specs
+mgrep --store personal watch
+```
+
+This combines both roots into one logical store named `personal`.
+
+### Practical rule of thumb
+
+If you are unsure, use this rule:
+
+- for one project: default `mgrep` is fine
+- for multiple unrelated projects: give each project its own `--store`
+- if you want one combined multi-root index: reuse the same `--store` deliberately
+
 ### `mgrep search`
 
 `mgrep search` is the default command. It searches the current directory unless you pass a path.
