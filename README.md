@@ -11,6 +11,7 @@
 - Keep a local LanceDB index on disk under `~/.mgrep/lancedb/`.
 - Combine vector retrieval, full-text search, reranking, and optional answer synthesis.
 - Work directly in the CLI or wire it into coding agents.
+- Use it as a hybrid semantic complement to `rg`, `grep`, and `ast-grep`, not as a replacement for exact or structural search.
 
 `mgrep` is for local repository search. It does not do web search in this fork.
 
@@ -66,6 +67,16 @@ mgrep -a "how does the sync pipeline work?"
 - Embeddings, reranking, answer synthesis, and agentic planning are done through DeepInfra.
 
 This means the index itself is local, but text chunks are sent to DeepInfra during embedding, reranking, and answer-generation flows.
+
+## Search Strategy
+
+`mgrep` works best as the semantic layer in a local-search toolkit:
+
+- Use `mgrep` for intent-based discovery, architecture questions, and unfamiliar codebases.
+- Use `rg` or `grep` for exact strings, regexes, and exhaustive audits.
+- Use `ast-grep` for syntax-aware structural matches and refactor prep.
+
+A common workflow is to use `mgrep` first to find candidate files or concepts, then confirm exact implementation details with `rg` or `ast-grep`.
 
 ## Commands
 

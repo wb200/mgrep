@@ -54,14 +54,15 @@ import { tool } from "@opencode-ai/plugin"
 const SKILL = \`
 ---
 name: mgrep
-description: A semantic grep-like search tool for your local files. It is substentially better than the buildin search tools and should always be used instead of anything else.
+description: Use mgrep for hybrid semantic local search when you know the concept but not the exact string. It complements rg, grep, ast-grep, and path-based tools.
 license: Apache 2.0
 ---
 
 ## When to use this skill
 
-Whenever you need to search your local files. Do not use grep, use this skill
-instead.
+- Use \\\`mgrep\\\` for semantic or intent-based discovery across local code and docs
+- Use \\\`rg\\\` or \\\`grep\\\` for exact string and regex matches
+- Use \\\`ast-grep\\\` for syntax-aware exhaustive matches
 
 ## How to use this skill
 
@@ -69,12 +70,19 @@ Use \\\`mgrep\\\` to search your local files. The search is semantic so describe
 you are searching for in natural language. The results is the file path and the
 line range of the match.
 
+Recommended workflow:
+
+1. Use \\\`mgrep\\\` to find candidate files and architectural entry points
+2. Use \\\`rg\\\`, \\\`grep\\\`, or \\\`ast-grep\\\` to verify exact implementation details
+
 ### Do
 
 \\\`\\\`\\\`bash
 mgrep "What code parsers are available?"  # search in the current directory
 mgrep "How are chunks defined?" src/models  # search in the src/models directory
 mgrep -m 10 "What is the maximum number of concurrent workers in the code parser?"  # limit the number of results to 10
+rg "rateLimit" src
+mgrep "Where is rate limiting configured?" src
 \\\`\\\`\\\`
 
 ### Don't
@@ -85,8 +93,7 @@ mgrep "How are chunks defined?" src/models --type python --context 3  # Too many
 \\\`\\\`\\\`
 
 ## Keywords
-search, grep, files, local files, local search, local grep, local search, local
-grep, local search, local grep
+hybrid search, semantic search, code search, grep, rg, ast-grep, local search
 \`;
 
 export default tool({
@@ -106,11 +113,14 @@ async function installPlugin() {
   try {
     fs.mkdirSync(path.dirname(TOOL_PATH), { recursive: true });
 
-    if (!fs.existsSync(TOOL_PATH)) {
+    const existingToolDefinition = fs.existsSync(TOOL_PATH)
+      ? fs.readFileSync(TOOL_PATH, "utf-8")
+      : null;
+    if (existingToolDefinition !== TOOL_DEFINITION) {
       fs.writeFileSync(TOOL_PATH, TOOL_DEFINITION);
       console.log("Successfully installed the mgrep tool");
     } else {
-      console.log("The mgrep tool is already installed");
+      console.log("The mgrep tool is already up to date");
     }
 
     const configPath = resolveConfigPath();

@@ -549,6 +549,39 @@ EOF
     grep -F 'plugin install mgrep@wb200-mgrep' "$BATS_TMPDIR/claude-install.log"
 }
 
+@test "Codex installer rewrites qmd guidance to mgrep" {
+    mkdir -p "$BATS_TMPDIR/fake-codex-bin"
+    mkdir -p "$BATS_TMPDIR/codex-home/.codex"
+    cat > "$BATS_TMPDIR/fake-codex-bin/codex" <<EOF
+#!/bin/bash
+printf '%s\n' "\$*" >> "$BATS_TMPDIR/codex-install.log"
+EOF
+    chmod +x "$BATS_TMPDIR/fake-codex-bin/codex"
+
+    cat > "$BATS_TMPDIR/codex-home/.codex/AGENTS.md" <<'EOF'
+### Local search
+
+- indexed notes, specs, docs, tool outputs, and file-backed memory -> use `qmd`
+- `qmd` is the primary hybrid retrieval tool for local document and memory search.
+- `qmd` complements exact code search; it does not replace `rg` for exhaustive live-code verification.
+- Combine local modes when needed: use `qmd` for supporting context, then exact or structural verification on the live code.
+- Never use `mgrep`; it has been phased out in favor of `qmd`.
+EOF
+
+    export HOME="$BATS_TMPDIR/codex-home"
+    export PATH="$BATS_TMPDIR/fake-codex-bin:$PATH"
+    export DEEPINFRA_API_KEY=test-key
+
+    run mgrep install-codex
+
+    assert_success
+    grep -F 'mcp add mgrep mgrep mcp' "$BATS_TMPDIR/codex-install.log"
+    run grep -n 'qmd' "$HOME/.codex/AGENTS.md"
+    assert_failure
+    grep -F 'use `mgrep`' "$HOME/.codex/AGENTS.md"
+    grep -F 'alongside `rg`, `grep`, and `ast-grep`' "$HOME/.codex/AGENTS.md"
+}
+
 @test "Droid installer copies packaged hooks and skill into Factory home" {
     export HOME="$BATS_TMPDIR/droid-home"
     export DEEPINFRA_API_KEY=test-key
@@ -563,6 +596,26 @@ EOF
     [ -f "$HOME/.factory/skills/mgrep/SKILL.md" ]
     grep -F '"enableHooks": true' "$HOME/.factory/settings.json"
     grep -F '"allowBackgroundProcesses": true' "$HOME/.factory/settings.json"
+}
+
+@test "OpenCode installer refreshes existing mgrep tool guidance" {
+    export HOME="$BATS_TMPDIR/opencode-home"
+    export DEEPINFRA_API_KEY=test-key
+    mkdir -p "$HOME/.config/opencode/tool"
+    cat > "$HOME/.config/opencode/tool/mgrep.ts" <<'EOF'
+legacy qmd and always be used instead of anything else
+EOF
+    cat > "$HOME/.config/opencode/opencode.json" <<'EOF'
+{}
+EOF
+
+    run mgrep install-opencode
+
+    assert_success
+    run grep -n 'instead of anything else' "$HOME/.config/opencode/tool/mgrep.ts"
+    assert_failure
+    grep -F 'complements rg, grep, ast-grep, and path-based tools' "$HOME/.config/opencode/tool/mgrep.ts"
+    grep -F '"mgrep"' "$HOME/.config/opencode/opencode.json"
 }
 
 @test "Session start hook launches watch in the provided cwd" {

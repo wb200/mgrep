@@ -8,7 +8,7 @@
 
 ### Core Purpose
 
-- Replace pattern-based grep with semantic, natural-language search
+- Add hybrid semantic, natural-language search alongside traditional grep tools
 - Index and search code, PDFs, images, and text files
 - Integrate with coding agents (Claude Code, Codex, OpenCode, Factory Droid)
 
@@ -199,6 +199,11 @@ refactor(store): extract sync logic to helper
 - Validate all user input before processing
 
 ## Agent-Specific Guidelines
+
+- Treat `mgrep` as a complementary semantic search tool, not a blanket replacement for `rg`, `grep`, or `ast-grep`.
+- Prefer `mgrep` for intent-level discovery, architecture questions, and unfamiliar codebases.
+- Prefer `rg`/`grep` for exact strings and regex audits, and `ast-grep` for syntax-aware exhaustive matching.
+- A good workflow is: `mgrep` to locate candidate files and concepts, then `rg` or `ast-grep` to verify exact implementation details.
 
 ### Before Making Changes
 

@@ -1,52 +1,72 @@
 ---
 name: mgrep
-description: "MANDATORY: Use `mgrep` for local semantic file and code search. Do not use built-in Grep or Glob for content search when intent-based local search is needed."
+description: "Use `mgrep` for hybrid semantic local search when you know the concept but not the exact string. It helps you find likely files and line ranges, then verify details with `rg`, `grep`, or `ast-grep`."
 license: Apache 2.0
 ---
 
-## CRITICAL: Tool Override
+## When to Use
 
-This skill is for local semantic file and code search.
+Use `mgrep` when you need concept-level or intent-level discovery in a local codebase or document set.
 
-❌ **WRONG**: Using built-in `Grep` tool
-❌ **WRONG**: Using built-in `Glob` for content search
+Good fits:
 
-✅ **CORRECT**: Invoke this skill, then use `mgrep "query"` for local file searches
+- You know the behavior, feature, or responsibility, but not the exact symbol or wording
+- You want likely files or chunks before doing exact verification
+- You are exploring an unfamiliar codebase and need fast architectural entry points
 
-## When to Invoke This Skill
+Prefer other tools when the task is exact or exhaustive:
 
-Invoke this skill **IMMEDIATELY** when:
+- Exact string or regex search: `rg` or `grep`
+- Syntax-aware structural search: `ast-grep`
+- File or path discovery: `fd`, glob tools, or directory listing tools
 
-- User asks to search files or code → use `mgrep "query"`
-- You need to find files, code, or content in the codebase → use `mgrep "query"`
+## What `mgrep` Does
 
-**DO NOT** use built-in Grep or Glob tools when the task is local semantic search. Use mgrep instead.
+`mgrep` performs hybrid local search over the indexed repository. It is best for semantic discovery, not exhaustive verification.
 
-## How to use this skill
+Write queries in natural language and describe the code by behavior, purpose, or architecture.
 
-Use `mgrep` to search your local files. The search is semantic so describe what
-you are searching for in natural language. The results is the file path and the
-line range of the match.
+## Recommended Workflow
 
-### Options
+1. Use `mgrep` to find candidate files and line ranges
+2. Open the most relevant hits
+3. Use `rg`, `grep`, or `ast-grep` to confirm exact implementation details
 
-- `-a, --answer` - Summarize the retrieved local search results
+## Query Guidance
 
-### Do
+Prefer specific conceptual queries over short vague terms.
 
-```bash
-mgrep "What code parsers are available?"  # search in the current directory
-mgrep "How are chunks defined?" src/models  # search in the src/models directory
-mgrep -m 10 "What is the maximum number of concurrent workers in the code parser?"  # limit the number of results to 10
-mgrep -a "How can I integrate the javascript runtime into deno?"  # summarize relevant local search results
-```
-
-### Don't
+Better:
 
 ```bash
-mgrep "parser"  # The query is to imprecise, use a more specific query
-mgrep "How are chunks defined?" src/models --type python --context 3  # Too many unnecessary filters, remove them
+mgrep "where is auth handled?"
+mgrep "retry configuration logic" src/
+mgrep "how are chunks defined?" src/
+mgrep "what starts background indexing?" src/
 ```
 
-## Keywords
-semantic search, search, grep, files, local files, local search
+Less useful:
+
+```bash
+mgrep "auth"
+mgrep "parser"
+mgrep "config"
+```
+
+## Useful Options
+
+- `-a, --answer`: summarize the retrieved local results
+- `-m, --max-count <n>`: limit the number of returned matches
+
+## Examples
+
+```bash
+mgrep "where is auth handled?"
+mgrep "retry configuration logic" src/
+mgrep -m 5 "how are chunks defined?" src/
+mgrep -a "how does indexing work?" src/
+```
+
+## Boundaries
+
+Use `mgrep` to narrow the search space semantically. Use exact or structural tools to verify final answers.

@@ -38,6 +38,23 @@ mgrep "Where is the auth middleware configured?"
 mgrep -a "How does rate limiting work in this service?"
 ```
 
+## Hybrid Search Workflow
+
+Use `mgrep` alongside traditional local search tools:
+
+- `mgrep` for semantic or intent-based discovery
+- `rg` or `grep` for exact strings and regex audits
+- `ast-grep` for syntax-aware structural search
+
+Typical workflow:
+
+```bash
+mgrep "Where is rate limiting configured?" src
+rg "rateLimit" src
+```
+
+The first step narrows the search space semantically. The second step verifies exact implementation details.
+
 ## Manual Usage Patterns
 
 ### Index a project
@@ -267,13 +284,18 @@ mgrep --store personal watch
 
 That creates one shared logical index named `personal`.
 
-## Classic grep vs mgrep
+## Classic grep vs mgrep vs ast-grep
 
 Use `grep` or `rg` when:
 
 - you know the exact symbol
 - you need exact-match refactoring support
 - you need regex-based auditing
+
+Use `ast-grep` when:
+
+- you need syntax-aware structural matches
+- you are preparing a refactor across many files
 
 Use `mgrep` when:
 
@@ -285,10 +307,11 @@ Example:
 
 ```bash
 rg "auth" src
+ast-grep --pattern 'router.use($$$ARGS)' src
 mgrep "Where is the auth middleware configured?" src
 ```
 
-The first is exact-string search. The second is intent-based search.
+The first is exact-string search. The second is syntax-aware structural search. The third is intent-based search.
 
 ## Working With Path Scopes
 
