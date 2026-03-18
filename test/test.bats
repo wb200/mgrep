@@ -529,3 +529,120 @@ teardown() {
     assert_output --partial 'file-in-foo.txt'
     refute_output --partial 'file-in-foobar.txt'
 }
+
+@test "Claude installer points to the wb200 marketplace" {
+    mkdir -p "$BATS_TMPDIR/fake-claude-bin"
+    cat > "$BATS_TMPDIR/fake-claude-bin/claude" <<EOF
+#!/bin/bash
+printf '%s\n' "\$*" >> "$BATS_TMPDIR/claude-install.log"
+EOF
+    chmod +x "$BATS_TMPDIR/fake-claude-bin/claude"
+
+    export PATH="$BATS_TMPDIR/fake-claude-bin:$PATH"
+    export DEEPINFRA_API_KEY=test-key
+
+    run mgrep install-claude-code
+
+    assert_success
+    assert_output --partial 'Successfully installed the mgrep plugin'
+    grep -F 'plugin marketplace add wb200/mgrep' "$BATS_TMPDIR/claude-install.log"
+    grep -F 'plugin install mgrep@wb200-mgrep' "$BATS_TMPDIR/claude-install.log"
+}
+
+@test "Droid installer copies packaged hooks and skill into Factory home" {
+    export HOME="$BATS_TMPDIR/droid-home"
+    export DEEPINFRA_API_KEY=test-key
+    mkdir -p "$HOME/.factory"
+    printf '{}' > "$HOME/.factory/settings.json"
+
+    run mgrep install-droid
+
+    assert_success
+    [ -f "$HOME/.factory/hooks/mgrep/mgrep_watch.py" ]
+    [ -f "$HOME/.factory/hooks/mgrep/mgrep_watch_kill.py" ]
+    [ -f "$HOME/.factory/skills/mgrep/SKILL.md" ]
+    grep -F '"enableHooks": true' "$HOME/.factory/settings.json"
+    grep -F '"allowBackgroundProcesses": true' "$HOME/.factory/settings.json"
+}
+
+@test "Session start hook launches watch in the provided cwd" {
+    mkdir -p "$BATS_TMPDIR/fake-mgrep-bin"
+    mkdir -p "$BATS_TMPDIR/hook-cwd"
+    cat > "$BATS_TMPDIR/fake-mgrep-bin/mgrep" <<EOF
+#!/bin/bash
+pwd > "$BATS_TMPDIR/hook-cwd.txt"
+printf '%s\n' "\$@" > "$BATS_TMPDIR/hook-args.txt"
+sleep 30
+EOF
+    chmod +x "$BATS_TMPDIR/fake-mgrep-bin/mgrep"
+
+    export PATH="$BATS_TMPDIR/fake-mgrep-bin:$PATH"
+    printf '{"cwd":"%s","session_id":"hook-session"}' \
+        "$BATS_TMPDIR/hook-cwd" > "$BATS_TMPDIR/hook-payload.json"
+
+    run bash -lc "cat '$BATS_TMPDIR/hook-payload.json' | python3 '$DIR/../plugins/mgrep/hooks/mgrep_watch.py'"
+
+    assert_success
+    assert_output --partial '"hookEventName": "SessionStart"'
+
+    sleep 1
+    [ "$(cat "$BATS_TMPDIR/hook-cwd.txt")" = "$BATS_TMPDIR/hook-cwd" ]
+    [ "$(cat "$BATS_TMPDIR/hook-args.txt")" = "watch" ]
+
+    run bash -lc "cat '$BATS_TMPDIR/hook-payload.json' | python3 '$DIR/../plugins/mgrep/hooks/mgrep_watch_kill.py'"
+
+    assert_success
+    [ ! -f "/tmp/mgrep-watch-pid-hook-session.txt" ]
+}
+
+@test "MCP server exposes search answer sync and status tools" {
+    cat > "$BATS_TMPDIR/mcp-test.mjs" <<EOF
+import { Client } from "$DIR/../node_modules/.pnpm/@modelcontextprotocol+sdk@1.22.0/node_modules/@modelcontextprotocol/sdk/dist/esm/client/index.js";
+import { InMemoryTransport } from "$DIR/../node_modules/.pnpm/@modelcontextprotocol+sdk@1.22.0/node_modules/@modelcontextprotocol/sdk/dist/esm/inMemory.js";
+import { createMgrepMcpServer } from "$DIR/../dist/commands/watch_mcp.js";
+
+const server = createMgrepMcpServer({
+  cwd: process.cwd(),
+  defaultStore: "mgrep",
+});
+const client = new Client({ name: "mgrep-test-client", version: "1.0.0" });
+const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+
+await server.connect(serverTransport);
+await client.connect(clientTransport);
+
+const tools = await client.listTools();
+const search = await client.callTool({ name: "search", arguments: { query: "test" } });
+const answer = await client.callTool({ name: "answer", arguments: { question: "test" } });
+const sync = await client.callTool({ name: "sync", arguments: { dryRun: true } });
+const status = await client.callTool({ name: "status", arguments: {} });
+const homeSync = await client.callTool({
+  name: "sync",
+  arguments: { path: process.env.HOME, dryRun: true },
+});
+
+console.log(JSON.stringify({
+  tools: tools.tools.map((tool) => tool.name).sort(),
+  searchHits: search.structuredContent.hits.length,
+  firstPath: search.structuredContent.hits[0].path,
+  answer: answer.structuredContent.answer,
+  syncProcessed: sync.structuredContent.processed,
+  statusExists: status.structuredContent.exists,
+  homeSyncError: homeSync.isError,
+}));
+
+await client.close();
+await server.close();
+EOF
+
+    run node "$BATS_TMPDIR/mcp-test.mjs"
+
+    assert_success
+    assert_output --partial '"search"'
+    assert_output --partial '"answer"'
+    assert_output --partial '"sync"'
+    assert_output --partial '"status"'
+    assert_output --partial '"This is a mock answer from TestStore.'
+    assert_output --partial '"statusExists":true'
+    assert_output --partial '"homeSyncError":true'
+}

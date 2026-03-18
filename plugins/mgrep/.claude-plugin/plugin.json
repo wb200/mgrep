@@ -1,9 +1,9 @@
 {
   "name": "mgrep",
-  "description": "Search your local files using Mixedbread",
-  "version": "0.0.0",
+  "description": "Semantic local search and background indexing for coding agents",
+  "version": "0.1.12",
   "author": {
-    "name": "Joel Dierkes"
+    "name": "wb200"
   },
   "hooks": "./hooks/hook.json"
 }

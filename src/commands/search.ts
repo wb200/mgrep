@@ -1,13 +1,12 @@
-import { join, normalize } from "node:path";
 import type { Command } from "commander";
 import { Command as CommanderCommand, InvalidArgumentError } from "commander";
 import {
-  type CliConfigOptions,
-  loadConfig,
-  type MgrepConfig,
-} from "../lib/config.js";
-import { createFileSystem, createStore } from "../lib/context.js";
-import { DEFAULT_IGNORE_PATTERNS } from "../lib/file.js";
+  executeAnswer,
+  executeSearch,
+  executeSync,
+  resolveScopedPath,
+} from "../lib/agent-service.js";
+import { createStore } from "../lib/context.js";
 import { output } from "../lib/logger.js";
 import type {
   AskResponse,
@@ -20,11 +19,7 @@ import {
   createIndexingSpinner,
   formatDryRunSummary,
 } from "../lib/sync-helpers.js";
-import {
-  initialSync,
-  isAtOrAboveHomeDirectory,
-  MaxFileCountExceededError,
-} from "../lib/utils.js";
+import { isAtOrAboveHomeDirectory, MaxFileCountExceededError } from "../lib/utils.js";
 
 function extractSources(response: AskResponse): { [key: number]: ChunkType } {
   const sources: { [key: number]: ChunkType } = {};
@@ -109,29 +104,30 @@ function parseBooleanEnv(
  */
 async function syncFiles(
   store: Store,
-  storeName: string,
   root: string,
-  dryRun: boolean,
-  config?: MgrepConfig,
+  options: {
+    store: string;
+    path?: string;
+    dryRun: boolean;
+    maxFileSize?: number;
+    maxFileCount?: number;
+  },
 ): Promise<boolean> {
-  const { spinner, onProgress } = createIndexingSpinner(root);
+  const scopedRoot = resolveScopedPath(root, options.path);
+  const { spinner, onProgress } = createIndexingSpinner(scopedRoot);
 
   try {
-    const fileSystem = createFileSystem({
-      ignorePatterns: [...DEFAULT_IGNORE_PATTERNS],
-    });
-    const result = await initialSync(
-      store,
-      fileSystem,
-      storeName,
-      root,
-      dryRun,
+    const { result } = await executeSync(store, root, {
+      store: options.store,
+      path: options.path,
+      dryRun: options.dryRun,
+      maxFileSize: options.maxFileSize,
+      maxFileCount: options.maxFileCount,
       onProgress,
-      config,
-    );
+    });
 
     while (true) {
-      const info = await store.getInfo(storeName);
+      const info = await store.getInfo(options.store);
       spinner.text = `Indexing ${info.counts.pending + info.counts.in_progress} file(s)`;
       if (info.counts.pending === 0 && info.counts.in_progress === 0) {
         break;
@@ -141,7 +137,7 @@ async function syncFiles(
 
     spinner.succeed("Indexing complete");
 
-    if (dryRun) {
+    if (options.dryRun) {
       output(
         formatDryRunSummary(result, {
           actionDescription: "would have indexed",
@@ -239,17 +235,9 @@ export const search: Command = new CommanderCommand("search")
     }
 
     const root = process.cwd();
-    const cliOptions: CliConfigOptions = {
-      maxFileSize: options.maxFileSize,
-      maxFileCount: options.maxFileCount,
-    };
-    const config = loadConfig(root, cliOptions);
+    const scopedPath = resolveScopedPath(root, exec_path);
 
-    const search_path = exec_path?.startsWith("/")
-      ? exec_path
-      : normalize(join(root, exec_path ?? ""));
-
-    if (options.sync && isAtOrAboveHomeDirectory(search_path)) {
+    if (options.sync && isAtOrAboveHomeDirectory(scopedPath)) {
       console.error(
         "Error: Cannot sync home directory or any parent directory.",
       );
@@ -264,54 +252,39 @@ export const search: Command = new CommanderCommand("search")
       const store = await createStore();
 
       if (options.sync) {
-        const shouldReturn = await syncFiles(
-          store,
-          options.store,
-          search_path,
-          options.dryRun,
-          config,
-        );
+        const shouldReturn = await syncFiles(store, root, {
+          store: options.store,
+          path: exec_path,
+          dryRun: options.dryRun,
+          maxFileSize: options.maxFileSize,
+          maxFileCount: options.maxFileCount,
+        });
         if (shouldReturn) {
           return;
         }
       }
 
-      const storeIds = [options.store];
-
-      const filters = {
-        all: [
-          {
-            key: "path",
-            operator: "starts_with" as const,
-            value: search_path,
-          },
-        ],
-      };
-
-      const searchOptions = {
-        rerank: options.rerank,
-        ...(options.agentic && { agentic: true }),
-      };
-
       let response: string;
       if (!options.answer) {
-        const results = await store.search(
-          storeIds,
-          pattern,
-          parseInt(options.maxCount, 10),
-          searchOptions,
-          filters,
-        );
-        response = formatSearchResponse(results, options.content);
+        const results = await executeSearch(store, root, {
+          store: options.store,
+          path: exec_path,
+          query: pattern,
+          maxCount: parseInt(options.maxCount, 10),
+          rerank: options.rerank,
+          agentic: options.agentic,
+        });
+        response = formatSearchResponse(results.response, options.content);
       } else {
-        const results = await store.ask(
-          storeIds,
-          pattern,
-          parseInt(options.maxCount, 10),
-          searchOptions,
-          filters,
-        );
-        response = formatAskResponse(results, options.content);
+        const results = await executeAnswer(store, root, {
+          store: options.store,
+          path: exec_path,
+          query: pattern,
+          maxCount: parseInt(options.maxCount, 10),
+          rerank: options.rerank,
+          agentic: options.agentic,
+        });
+        response = formatAskResponse(results.response, options.content);
       }
 
       output(response);

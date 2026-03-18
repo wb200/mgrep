@@ -31,16 +31,28 @@ def read_hook_input():
 
 
 if __name__ == "__main__":
-    payload = read_hook_input()
-    cwd = payload.get("cwd")
+    payload = read_hook_input() or {}
+    cwd = payload.get("cwd") or os.getcwd()
+    session_id = payload.get("session_id")
 
-    pid_file = f"/tmp/mgrep-watch-pid-{payload.get('session_id')}.txt"
+    if not session_id:
+        debug_log("Missing session_id in hook payload")
+        sys.exit(0)
+
+    pid_file = f"/tmp/mgrep-watch-pid-{session_id}.txt"
     if os.path.exists(pid_file):
         debug_log(f"PID file already exists: {pid_file}")
-        sys.exit(1)
+        sys.exit(0)
 
-    process = subprocess.Popen(["mgrep", "watch"], preexec_fn=os.setsid, stdout=open(f"/tmp/mgrep-watch-command-{payload.get('session_id')}.log", "w"), stderr=open(f"/tmp/mgrep-watch-command-{payload.get('session_id')}.log", "w"))
+    process = subprocess.Popen(
+        ["mgrep", "watch"],
+        cwd=cwd,
+        preexec_fn=os.setsid,
+        stdout=open(f"/tmp/mgrep-watch-command-{session_id}.log", "w"),
+        stderr=open(f"/tmp/mgrep-watch-command-{session_id}.log", "w"),
+    )
     debug_log(f"Started mgrep watch process: {process.pid}")
+    debug_log(f"Watch cwd: {cwd}")
     debug_log(f"All environment variables: {os.environ}")
     with open(pid_file, "w") as handle:
         handle.write(str(process.pid))

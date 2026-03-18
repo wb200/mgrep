@@ -1,19 +1,21 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "Mixedbread-Grep",
+  "name": "wb200-mgrep",
   "owner": {
-    "name": "Mixedbread",
-    "email": "support@mixedbread.ai"
+    "name": "wb200"
   },
   "plugins": [
     {
       "name": "mgrep",
       "source": "./plugins/mgrep",
-      "description": "Search your local files using Mixedbread",
-      "version": "0.0.0",
+      "description": "Semantic local search and background indexing for coding agents",
+      "version": "0.1.12",
       "author": {
-        "name": "Joel Dierkes"
+        "name": "wb200"
       },
+      "homepage": "https://github.com/wb200/mgrep",
+      "repository": "https://github.com/wb200/mgrep",
+      "license": "Apache-2.0",
       "skills": ["./skills/mgrep"]
     }
   ]

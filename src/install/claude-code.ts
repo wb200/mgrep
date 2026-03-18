@@ -12,13 +12,11 @@ const execAsync = promisify(exec);
 
 async function installPlugin() {
   try {
-    await execAsync("claude plugin marketplace add mixedbread-ai/mgrep", {
+    await execAsync("claude plugin marketplace add wb200/mgrep", {
       shell,
       env: process.env,
     });
-    console.log(
-      "Successfully added the mixedbread-ai/mgrep plugin to the marketplace",
-    );
+    console.log("Successfully added the wb200/mgrep plugin marketplace");
   } catch (error) {
     console.error(`Error installing plugin: ${error}`);
     console.error(
@@ -27,7 +25,7 @@ async function installPlugin() {
   }
 
   try {
-    await execAsync("claude plugin install mgrep", {
+    await execAsync("claude plugin install mgrep@wb200-mgrep", {
       shell,
       env: process.env,
     });
@@ -45,7 +43,7 @@ async function installPlugin() {
 
 async function uninstallPlugin() {
   try {
-    await execAsync("claude plugin uninstall mgrep", {
+    await execAsync("claude plugin uninstall mgrep@wb200-mgrep", {
       shell,
       env: process.env,
     });
@@ -58,13 +56,11 @@ async function uninstallPlugin() {
   }
 
   try {
-    await execAsync("claude plugin marketplace remove mixedbread-ai/mgrep", {
+    await execAsync("claude plugin marketplace remove wb200/mgrep", {
       shell,
       env: process.env,
     });
-    console.log(
-      "Successfully removed the mixedbread-ai/mgrep plugin from the marketplace",
-    );
+    console.log("Successfully removed the wb200/mgrep plugin marketplace");
   } catch (error) {
     console.error(`Error removing plugin from marketplace: ${error}`);
     console.error(
