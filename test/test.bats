@@ -546,7 +546,31 @@ EOF
     assert_success
     assert_output --partial 'Successfully installed the mgrep plugin'
     grep -F 'plugin marketplace add wb200/mgrep' "$BATS_TMPDIR/claude-install.log"
+    grep -F 'plugin marketplace update wb200-mgrep' "$BATS_TMPDIR/claude-install.log"
     grep -F 'plugin install mgrep@wb200-mgrep' "$BATS_TMPDIR/claude-install.log"
+}
+
+@test "Claude uninstall ignores missing marketplace entry" {
+    mkdir -p "$BATS_TMPDIR/fake-claude-bin"
+    cat > "$BATS_TMPDIR/fake-claude-bin/claude" <<EOF
+#!/bin/bash
+printf '%s\n' "\$*" >> "$BATS_TMPDIR/claude-uninstall.log"
+if [[ "\$*" == "plugin marketplace remove wb200/mgrep" ]]; then
+  echo "✘ Failed to remove marketplace: Marketplace 'wb200/mgrep' not found" >&2
+  exit 1
+fi
+EOF
+    chmod +x "$BATS_TMPDIR/fake-claude-bin/claude"
+
+    export PATH="$BATS_TMPDIR/fake-claude-bin:$PATH"
+
+    run mgrep uninstall-claude-code
+
+    assert_success
+    assert_output --partial 'Successfully uninstalled the mgrep plugin'
+    assert_output --partial 'plugin marketplace was not configured locally'
+    grep -F 'plugin uninstall mgrep@wb200-mgrep' "$BATS_TMPDIR/claude-uninstall.log"
+    grep -F 'plugin marketplace remove wb200/mgrep' "$BATS_TMPDIR/claude-uninstall.log"
 }
 
 @test "Codex installer rewrites qmd guidance to mgrep" {

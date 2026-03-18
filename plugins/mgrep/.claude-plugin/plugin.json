@@ -1,7 +1,7 @@
 {
   "name": "mgrep",
   "description": "Semantic local search and background indexing for coding agents",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "author": {
     "name": "wb200"
   },
