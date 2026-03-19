@@ -49,11 +49,17 @@ async function runClaudeCommand(command: string): Promise<void> {
 
 async function installPlugin() {
   try {
-    await runClaudeCommand(`claude plugin marketplace add ${MARKETPLACE_SOURCE}`);
-    console.log(`Successfully added the ${MARKETPLACE_SOURCE} plugin marketplace`);
+    await runClaudeCommand(
+      `claude plugin marketplace add ${MARKETPLACE_SOURCE}`,
+    );
+    console.log(
+      `Successfully added the ${MARKETPLACE_SOURCE} plugin marketplace`,
+    );
   } catch (error) {
     if (isAlreadyConfiguredError(error)) {
-      console.log(`The ${MARKETPLACE_SOURCE} plugin marketplace is already configured`);
+      console.log(
+        `The ${MARKETPLACE_SOURCE} plugin marketplace is already configured`,
+      );
     } else {
       console.error(`Error installing plugin: ${error}`);
       console.error(
@@ -63,8 +69,12 @@ async function installPlugin() {
   }
 
   try {
-    await runClaudeCommand(`claude plugin marketplace update ${MARKETPLACE_NAME}`);
-    console.log(`Successfully updated the ${MARKETPLACE_SOURCE} plugin marketplace`);
+    await runClaudeCommand(
+      `claude plugin marketplace update ${MARKETPLACE_NAME}`,
+    );
+    console.log(
+      `Successfully updated the ${MARKETPLACE_SOURCE} plugin marketplace`,
+    );
   } catch (error) {
     console.error(`Error updating plugin marketplace: ${error}`);
     console.error(
@@ -98,11 +108,17 @@ async function uninstallPlugin() {
   }
 
   try {
-    await runClaudeCommand(`claude plugin marketplace remove ${MARKETPLACE_SOURCE}`);
-    console.log(`Successfully removed the ${MARKETPLACE_SOURCE} plugin marketplace`);
+    await runClaudeCommand(
+      `claude plugin marketplace remove ${MARKETPLACE_SOURCE}`,
+    );
+    console.log(
+      `Successfully removed the ${MARKETPLACE_SOURCE} plugin marketplace`,
+    );
   } catch (error) {
     if (isMarketplaceNotFoundError(error)) {
-      console.log(`The ${MARKETPLACE_SOURCE} plugin marketplace was not configured locally`);
+      console.log(
+        `The ${MARKETPLACE_SOURCE} plugin marketplace was not configured locally`,
+      );
       return;
     }
 

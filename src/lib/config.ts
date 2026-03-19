@@ -3,6 +3,12 @@ import * as os from "node:os";
 import * as path from "node:path";
 import YAML from "yaml";
 import { z } from "zod";
+import {
+  DEFAULT_ALLOWED_DOTFILES,
+  DEFAULT_ALLOWED_EXTENSIONS,
+  DEFAULT_ALLOWED_NAMES,
+  DEFAULT_IGNORE_PATTERNS,
+} from "./file.js";
 
 const LOCAL_CONFIG_FILES = [".mgreprc.yaml", ".mgreprc.yml"] as const;
 const GLOBAL_CONFIG_DIR = ".config/mgrep";
@@ -26,6 +32,10 @@ const ConfigSchema = z.object({
   embedDimensions: z.number().positive().optional(),
   rerankModel: z.string().min(1).optional(),
   llmModel: z.string().min(1).optional(),
+  allowedExtensions: z.array(z.string().min(1)).optional(),
+  allowedNames: z.array(z.string().min(1)).optional(),
+  allowedDotfiles: z.array(z.string().min(1)).optional(),
+  ignorePatterns: z.array(z.string().min(1)).optional(),
 });
 
 /**
@@ -84,6 +94,26 @@ export interface MgrepConfig {
    * The DeepInfra LLM model to use for synthesized answers and agentic planning.
    */
   llmModel: string;
+
+  /**
+   * Allowed file extensions for text indexing.
+   */
+  allowedExtensions: string[];
+
+  /**
+   * Allowed exact basenames for extensionless files.
+   */
+  allowedNames: string[];
+
+  /**
+   * Allowed hidden basenames. Hidden directories remain blocked.
+   */
+  allowedDotfiles: string[];
+
+  /**
+   * Additional glob patterns that denylist files after allowlist admission.
+   */
+  ignorePatterns: string[];
 }
 
 const DEFAULT_CONFIG: MgrepConfig = {
@@ -95,6 +125,10 @@ const DEFAULT_CONFIG: MgrepConfig = {
   embedDimensions: DEFAULT_EMBED_DIMENSIONS,
   rerankModel: DEFAULT_RERANK_MODEL,
   llmModel: DEFAULT_LLM_MODEL,
+  allowedExtensions: [...DEFAULT_ALLOWED_EXTENSIONS],
+  allowedNames: [...DEFAULT_ALLOWED_NAMES],
+  allowedDotfiles: [...DEFAULT_ALLOWED_DOTFILES],
+  ignorePatterns: [...DEFAULT_IGNORE_PATTERNS],
 };
 
 const configCache = new Map<string, MgrepConfig>();
@@ -122,6 +156,38 @@ function readYamlConfig(filePath: string): Partial<MgrepConfig> | null {
     );
     return null;
   }
+}
+
+function normalizeExtension(value: string): string {
+  return value.trim().replace(/^\./, "").toLowerCase();
+}
+
+function normalizeDotfile(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+  return trimmed.startsWith(".") ? trimmed : `.${trimmed}`;
+}
+
+function normalizeUnique(values: readonly string[]): string[] {
+  return Array.from(
+    new Set(values.map((value) => value.trim()).filter(Boolean)),
+  );
+}
+
+function normalizeConfig(config: MgrepConfig): MgrepConfig {
+  return {
+    ...config,
+    allowedExtensions: normalizeUnique(config.allowedExtensions).map(
+      normalizeExtension,
+    ),
+    allowedNames: normalizeUnique(config.allowedNames),
+    allowedDotfiles: normalizeUnique(config.allowedDotfiles).map(
+      normalizeDotfile,
+    ),
+    ignorePatterns: normalizeUnique(config.ignorePatterns),
+  };
 }
 
 /**
@@ -245,10 +311,16 @@ export function loadConfig(
     ...localConfig,
     ...envConfig,
     ...filterUndefinedCliOptions(cliOptions),
+    ignorePatterns: [
+      ...DEFAULT_IGNORE_PATTERNS,
+      ...(globalConfig?.ignorePatterns ?? []),
+      ...(localConfig?.ignorePatterns ?? []),
+    ],
   };
 
-  configCache.set(cacheKey, config);
-  return config;
+  const normalizedConfig = normalizeConfig(config);
+  configCache.set(cacheKey, normalizedConfig);
+  return normalizedConfig;
 }
 
 function filterUndefinedCliOptions(

@@ -1,7 +1,10 @@
 import { join, normalize } from "node:path";
-import { type CliConfigOptions, loadConfig, type MgrepConfig } from "./config.js";
+import {
+  type CliConfigOptions,
+  loadConfig,
+  type MgrepConfig,
+} from "./config.js";
 import { createFileSystem } from "./context.js";
-import { DEFAULT_IGNORE_PATTERNS } from "./file.js";
 import type {
   AskResponse,
   ChunkType,
@@ -173,7 +176,10 @@ export async function executeSync(
     maxFileCount: options.maxFileCount,
   });
   const fileSystem = createFileSystem({
-    ignorePatterns: [...DEFAULT_IGNORE_PATTERNS],
+    ignorePatterns: config.ignorePatterns,
+    allowedExtensions: config.allowedExtensions,
+    allowedNames: config.allowedNames,
+    allowedDotfiles: config.allowedDotfiles,
   });
   const result = await initialSync(
     store,

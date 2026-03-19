@@ -62,7 +62,8 @@ mgrep -a "how does the sync pipeline work?"
 
 `mgrep` keeps a local searchable index of your repository.
 
-- File discovery respects `.gitignore`, `.mgrepignore`, hidden files, and built-in ignore patterns.
+- Indexing is allowlist-first. A file must match an allowed extension, exact basename, or exact hidden basename before it is eligible for indexing.
+- After allowlist admission, `.gitignore`, `.mgrepignore`, built-in deny patterns, hidden-directory blocking, and text-file detection can still exclude it.
 - Indexed content is chunked and stored locally in LanceDB.
 - Embeddings, reranking, answer synthesis, and agentic planning are done through DeepInfra.
 
@@ -178,7 +179,7 @@ mgrep "query"
 
 - the current working directory
 - all subdirectories under it
-- only files that survive `.gitignore`, `.mgrepignore`, hidden-file filtering, built-in ignore patterns, and text-file detection
+- only files that match the current allowlist, then survive `.gitignore`, `.mgrepignore`, built-in deny patterns, hidden-directory blocking, and text-file detection
 
 So this:
 
@@ -376,17 +377,19 @@ Configuration sources, highest precedence first:
 
 ### Config File
 
-Example:
+Example override:
+
+This example narrows indexing further than the built-in defaults. For the full
+current default allowlist and a full ready-to-paste `.mgreprc.yaml`, see
+[`guides/README.md`](./guides/README.md).
 
 ```yaml
 maxFileSize: 5242880
 maxFileCount: 5000
 syncConcurrency: 10
-embedModel: Qwen/Qwen3-Embedding-4B
-embedDimensions: 2560
-rerankModel: Qwen/Qwen3-Reranker-4B
-llmModel: MiniMaxAI/MiniMax-M2.5
-lancedbPath: /path/to/lancedb
+ignorePatterns:
+  - "*.csv"
+  - "*.jsonl"
 ```
 
 Defaults:
@@ -437,9 +440,14 @@ Model overrides:
 
 ## Search Behavior and Limits
 
-- `mgrep` is text-first. Non-text and binary files are skipped.
-- Built-in ignore patterns include `*.lock`, `*.bin`, `*.ipynb`, `*.pyc`, `*.safetensors`, `*.sqlite`, and `*.pt`.
-- Hidden files are ignored.
+- `mgrep` is text-first and allowlist-first.
+- A file must match an allowed extension, exact basename, or exact hidden basename before it is eligible for indexing.
+- Hidden directories remain excluded by default, even if a file inside them would otherwise match the allowlist.
+- Default indexed content spans config and structured text, developer artifacts, docs and notes, exact filenames, exact hidden basenames, markup and templates, Python and related files, queries and infra, shell and automation, and web or mixed-language repo text.
+- Built-in deny patterns include `*.bin`, `*.lock`, `*.pt`, `*.pyc`, `*.safetensors`, and `*.sqlite`.
+- `.gitignore`, `.mgrepignore`, and configured `ignorePatterns` still apply after allowlist admission.
+- Non-text and binary files are skipped even if they match the allowlist.
+- For the exhaustive default inventory, see [`guides/README.md`](./guides/README.md).
 - `watch` and `search --sync` refuse to operate on the home directory or parent directories of it.
 - Sync is bounded by `maxFileSize` and `maxFileCount`.
 
@@ -479,6 +487,7 @@ The built CLI entrypoint is `dist/index.js`.
 
 - Missing API keys: run `mgrep validate`
 - Sync blocked at home directory: run from a specific project subdirectory
+- Why a file may not be indexed: it may be outside the allowlist, inside a hidden directory, excluded by `.gitignore`, `.mgrepignore`, or `ignorePatterns`, or rejected as binary or non-text
 - Store incompatibility after changing embedding settings: delete the affected store under `~/.mgrep/lancedb/<store-name>/` and re-index
 - Slow initial indexing: lower `syncConcurrency` if you are rate-limited, or tune file limits for very large repos
 

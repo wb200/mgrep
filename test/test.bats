@@ -270,6 +270,102 @@ teardown() {
     refute_output --partial 'binaryfile.bin'
 }
 
+@test "Config allowlist indexes ipynb and log but skips csv" {
+    rm "$BATS_TMPDIR/mgrep-test-store.json"
+    cat > "$BATS_TMPDIR/test-store/.mgreprc.yaml" <<'EOF'
+allowedExtensions:
+  - ipynb
+  - log
+EOF
+
+    cat > "$BATS_TMPDIR/test-store/notebook.ipynb" <<'EOF'
+{"cells":[{"cell_type":"markdown","metadata":{},"source":["unique notebook token"]}],"metadata":{},"nbformat":4,"nbformat_minor":5}
+EOF
+    echo "unique log token" > "$BATS_TMPDIR/test-store/app.log"
+    echo "unique csv token" > "$BATS_TMPDIR/test-store/data.csv"
+
+    run mgrep search --sync "unique notebook token"
+    assert_success
+    assert_output --partial 'notebook.ipynb'
+
+    run mgrep search "unique log token"
+    assert_success
+    assert_output --partial 'app.log'
+
+    run mgrep search "unique csv token"
+    assert_success
+    refute_output --partial 'data.csv'
+}
+
+@test "Config allowlist supports allowed names and dotfiles while blocking hidden directories" {
+    rm "$BATS_TMPDIR/mgrep-test-store.json"
+    cat > "$BATS_TMPDIR/test-store/.mgreprc.yaml" <<'EOF'
+allowedExtensions:
+  - yml
+allowedNames:
+  - config
+  - Config
+allowedDotfiles:
+  - .pre-commit-config.yaml
+EOF
+
+    echo "lowercase config token" > "$BATS_TMPDIR/test-store/config"
+    echo "uppercase Config token" > "$BATS_TMPDIR/test-store/Config"
+    echo "dotfile token" > "$BATS_TMPDIR/test-store/.pre-commit-config.yaml"
+    mkdir -p "$BATS_TMPDIR/test-store/.github/workflows"
+    echo "hidden dir token" > "$BATS_TMPDIR/test-store/.github/workflows/ci.yml"
+
+    run mgrep search --sync "lowercase config token"
+    assert_success
+    assert_output --partial 'config'
+
+    run mgrep search "uppercase Config token"
+    assert_success
+    assert_output --partial 'Config'
+
+    run mgrep search "dotfile token"
+    assert_success
+    assert_output --partial '.pre-commit-config.yaml'
+
+    run mgrep search "hidden dir token"
+    assert_success
+    refute_output --partial 'ci.yml'
+}
+
+@test "Allowlist blocks mgrepignore negation for disallowed files" {
+    rm "$BATS_TMPDIR/mgrep-test-store.json"
+    cat > "$BATS_TMPDIR/test-store/.mgreprc.yaml" <<'EOF'
+allowedExtensions:
+  - py
+EOF
+    printf '*.csv\n!data.csv\n' > "$BATS_TMPDIR/test-store/.mgrepignore"
+    echo "csv should stay out" > "$BATS_TMPDIR/test-store/data.csv"
+    echo "python should stay in" > "$BATS_TMPDIR/test-store/main.py"
+
+    run mgrep search --sync "python should stay in"
+    assert_success
+    assert_output --partial 'main.py'
+
+    run mgrep search "csv should stay out"
+    assert_success
+    refute_output --partial 'data.csv'
+}
+
+@test "Dry run deletes indexed files that are no longer allowlisted" {
+    cat > "$BATS_TMPDIR/test-store/.mgreprc.yaml" <<'EOF'
+allowedExtensions:
+  - log
+EOF
+    echo "fresh log token" > "$BATS_TMPDIR/test-store/app.log"
+
+    run mgrep watch --dry-run
+
+    assert_success
+    assert_output --partial 'would have deleted'
+    assert_output --partial 'test.txt'
+    assert_output --partial 'app.log'
+}
+
 # bats test_tags=long-running
 @test "Handles large git repositories with >1MB ls-files output" {
     rm -rf "$BATS_TMPDIR/large-repo"

@@ -3,7 +3,6 @@ import * as path from "node:path";
 import { Command, InvalidArgumentError } from "commander";
 import { type CliConfigOptions, loadConfig } from "../lib/config.js";
 import { createFileSystem, createStore } from "../lib/context.js";
-import { DEFAULT_IGNORE_PATTERNS } from "../lib/file.js";
 import { output } from "../lib/logger.js";
 import {
   createIndexingSpinner,
@@ -26,11 +25,6 @@ export interface WatchOptions {
 
 export async function startWatch(options: WatchOptions): Promise<void> {
   try {
-    const store = await createStore();
-
-    const fileSystem = createFileSystem({
-      ignorePatterns: [...DEFAULT_IGNORE_PATTERNS],
-    });
     const watchRoot = process.cwd();
 
     if (isAtOrAboveHomeDirectory(watchRoot)) {
@@ -44,11 +38,18 @@ export async function startWatch(options: WatchOptions): Promise<void> {
       return;
     }
 
+    const store = await createStore();
     const cliOptions: CliConfigOptions = {
       maxFileSize: options.maxFileSize,
       maxFileCount: options.maxFileCount,
     };
     const config = loadConfig(watchRoot, cliOptions);
+    const fileSystem = createFileSystem({
+      ignorePatterns: config.ignorePatterns,
+      allowedExtensions: config.allowedExtensions,
+      allowedNames: config.allowedNames,
+      allowedDotfiles: config.allowedDotfiles,
+    });
     console.debug("Watching for file changes in", watchRoot);
 
     const { spinner, onProgress } = createIndexingSpinner(watchRoot);

@@ -40,8 +40,6 @@ export function createGit(): Git {
 /**
  * Creates a FileSystem instance
  */
-export function createFileSystem(
-  options: FileSystemOptions = { ignorePatterns: [] },
-): FileSystem {
+export function createFileSystem(options: FileSystemOptions = {}): FileSystem {
   return new NodeFileSystem(createGit(), options);
 }

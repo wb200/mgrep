@@ -175,7 +175,9 @@ async function installPlugin() {
       fs.writeFileSync(destPath, updatedContent);
       console.log("Successfully updated the mgrep guidance in the Codex agent");
     } else {
-      console.log("The mgrep guidance is already up to date in the Codex agent");
+      console.log(
+        "The mgrep guidance is already up to date in the Codex agent",
+      );
     }
 
     printInstallWarning("Codex", "mgrep uninstall-codex");

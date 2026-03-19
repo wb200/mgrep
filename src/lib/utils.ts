@@ -190,7 +190,7 @@ export async function uploadFile(
     return false;
   }
 
-  if (!isText(filePath)) {
+  if (!isText(filePath, buffer)) {
     return false;
   }
 

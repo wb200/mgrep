@@ -19,7 +19,10 @@ import {
   createIndexingSpinner,
   formatDryRunSummary,
 } from "../lib/sync-helpers.js";
-import { isAtOrAboveHomeDirectory, MaxFileCountExceededError } from "../lib/utils.js";
+import {
+  isAtOrAboveHomeDirectory,
+  MaxFileCountExceededError,
+} from "../lib/utils.js";
 
 function extractSources(response: AskResponse): { [key: number]: ChunkType } {
   const sources: { [key: number]: ChunkType } = {};

@@ -3,6 +3,140 @@ import * as path from "node:path";
 import ignore from "ignore";
 import type { Git } from "./git.js";
 
+export const DEFAULT_ALLOWED_EXTENSIONS: readonly string[] = [
+  "py",
+  "pyi",
+  "pyw",
+  "pyx",
+  "pxd",
+  "pxi",
+  "ipynb",
+  "md",
+  "mdx",
+  "rst",
+  "txt",
+  "adoc",
+  "asciidoc",
+  "toml",
+  "ini",
+  "cfg",
+  "conf",
+  "yaml",
+  "yml",
+  "json",
+  "jsonc",
+  "json5",
+  "hjson",
+  "properties",
+  "sh",
+  "bash",
+  "zsh",
+  "fish",
+  "ksh",
+  "csh",
+  "tcsh",
+  "ps1",
+  "psm1",
+  "jinja",
+  "jinja2",
+  "j2",
+  "tpl",
+  "tmpl",
+  "template",
+  "html",
+  "htm",
+  "css",
+  "scss",
+  "sass",
+  "less",
+  "xml",
+  "xsd",
+  "xsl",
+  "xslt",
+  "sql",
+  "gql",
+  "graphql",
+  "graphqls",
+  "proto",
+  "tf",
+  "tfvars",
+  "hcl",
+  "cue",
+  "cmake",
+  "mk",
+  "nix",
+  "rego",
+  "js",
+  "mjs",
+  "cjs",
+  "jsx",
+  "ts",
+  "mts",
+  "cts",
+  "tsx",
+  "vue",
+  "svelte",
+  "patch",
+  "diff",
+  "http",
+  "rest",
+  "po",
+  "pot",
+  "mermaid",
+  "mmd",
+  "puml",
+  "plantuml",
+  "log",
+];
+
+export const DEFAULT_ALLOWED_NAMES: readonly string[] = [
+  "Dockerfile",
+  "Containerfile",
+  "Makefile",
+  "makefile",
+  "GNUmakefile",
+  "Justfile",
+  "justfile",
+  "Procfile",
+  "Pipfile",
+  "Jenkinsfile",
+  "Tiltfile",
+  "Earthfile",
+  "Vagrantfile",
+  "Snakefile",
+  "Brewfile",
+  "README",
+  "LICENSE",
+  "NOTICE",
+  "COPYING",
+  "CHANGELOG",
+  "config",
+  "Config",
+];
+
+export const DEFAULT_ALLOWED_DOTFILES: readonly string[] = [
+  ".editorconfig",
+  ".gitignore",
+  ".gitattributes",
+  ".gitmodules",
+  ".dockerignore",
+  ".pre-commit-config.yaml",
+  ".python-version",
+  ".tool-versions",
+  ".coveragerc",
+  ".flake8",
+  ".mypy.ini",
+  ".pylintrc",
+  ".ruff.toml",
+  ".pyre_configuration",
+  ".isort.cfg",
+  ".bumpversion.cfg",
+  ".yamllint",
+  ".prettierrc",
+  ".eslintrc",
+  ".eslintignore",
+];
+
 /**
  * Default glob patterns to ignore during file indexing.
  * These are not useful for the local text-first LanceDB index.
@@ -10,21 +144,57 @@ import type { Git } from "./git.js";
 export const DEFAULT_IGNORE_PATTERNS: readonly string[] = [
   "*.lock",
   "*.bin",
-  "*.ipynb",
   "*.pyc",
   "*.safetensors",
   "*.sqlite",
   "*.pt",
 ];
 
+function normalizeExtension(value: string): string {
+  return value.trim().replace(/^\./, "").toLowerCase();
+}
+
+function normalizeUnique(values: readonly string[]): string[] {
+  return Array.from(
+    new Set(values.map((value) => value.trim()).filter(Boolean)),
+  );
+}
+
+function normalizeDotfile(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+  return trimmed.startsWith(".") ? trimmed : `.${trimmed}`;
+}
+
+function isHiddenSegment(part: string): boolean {
+  return part.startsWith(".") && part !== "." && part !== "..";
+}
+
 /**
  * Configuration options for file system operations
  */
 export interface FileSystemOptions {
   /**
-   * Additional glob patterns to ignore (in addition to .gitignore and hidden files)
+   * Additional glob patterns to ignore after allowlist admission.
    */
-  ignorePatterns: string[];
+  ignorePatterns?: string[];
+
+  /**
+   * Allowed file extensions for text indexing.
+   */
+  allowedExtensions?: string[];
+
+  /**
+   * Allowed exact basenames for extensionless files.
+   */
+  allowedNames?: string[];
+
+  /**
+   * Allowed hidden basenames. Hidden directories remain blocked.
+   */
+  allowedDotfiles?: string[];
 }
 
 /**
@@ -53,24 +223,50 @@ export interface FileSystem {
 export class NodeFileSystem implements FileSystem {
   private customIgnoreFilter: ReturnType<typeof ignore>;
   private ignoreCache = new Map<string, ReturnType<typeof ignore>>();
+  private allowedExtensions: Set<string>;
+  private allowedNames: Set<string>;
+  private allowedDotfiles: Set<string>;
 
   constructor(
     private git: Git,
     options: FileSystemOptions,
   ) {
     this.customIgnoreFilter = ignore();
-    this.customIgnoreFilter.add(options.ignorePatterns);
+    this.customIgnoreFilter.add(options.ignorePatterns ?? []);
+    this.allowedExtensions = new Set(
+      normalizeUnique(options.allowedExtensions ?? []).map(normalizeExtension),
+    );
+    this.allowedNames = new Set(normalizeUnique(options.allowedNames ?? []));
+    this.allowedDotfiles = new Set(
+      normalizeUnique(options.allowedDotfiles ?? []).map(normalizeDotfile),
+    );
   }
 
-  /**
-   * Checks if a file is a hidden file (starts with .)
-   */
-  private isHiddenFile(filePath: string, root: string): boolean {
+  private getRelativeParts(filePath: string, root: string): string[] {
     const relativePath = path.relative(root, filePath);
-    const parts = relativePath.split(path.sep);
-    return parts.some(
-      (part) => part.startsWith(".") && part !== "." && part !== "..",
-    );
+    if (!relativePath || relativePath === ".") {
+      return [];
+    }
+    return relativePath.split(path.sep).filter(Boolean);
+  }
+
+  private hasHiddenParentDirectory(filePath: string, root: string): boolean {
+    const parts = this.getRelativeParts(filePath, root);
+    return parts.slice(0, -1).some(isHiddenSegment);
+  }
+
+  private isAllowedFile(filePath: string): boolean {
+    const basename = path.basename(filePath);
+    if (isHiddenSegment(basename)) {
+      return this.allowedDotfiles.has(basename);
+    }
+
+    if (this.allowedNames.has(basename)) {
+      return true;
+    }
+
+    const extension = normalizeExtension(path.extname(basename));
+    return extension !== "" && this.allowedExtensions.has(extension);
   }
 
   /**
@@ -81,10 +277,6 @@ export class NodeFileSystem implements FileSystem {
       const entries = fs.readdirSync(dir, { withFileTypes: true });
       for (const entry of entries) {
         const fullPath = path.join(dir, entry.name);
-
-        if (this.isHiddenFile(fullPath, root)) {
-          continue;
-        }
 
         if (this.isIgnored(fullPath, root)) {
           continue;
@@ -136,24 +328,13 @@ export class NodeFileSystem implements FileSystem {
     return ig;
   }
 
-  isIgnored(filePath: string, root: string): boolean {
-    // Always ignore hidden files
-    if (this.isHiddenFile(filePath, root)) {
-      return true;
-    }
-
-    // Check custom ignore patterns (global/CLI)
+  private isIgnoredByPatterns(
+    filePath: string,
+    root: string,
+    isDirectory: boolean,
+  ): boolean {
     const relativeToRoot = path.relative(root, filePath);
     const normalizedRootPath = relativeToRoot.replace(/\\/g, "/");
-
-    // Check if it's a directory
-    let isDirectory = false;
-    try {
-      const stat = fs.statSync(filePath);
-      isDirectory = stat.isDirectory();
-    } catch {
-      isDirectory = false;
-    }
 
     const pathToCheckRoot = isDirectory
       ? `${normalizedRootPath}/`
@@ -162,25 +343,18 @@ export class NodeFileSystem implements FileSystem {
       return true;
     }
 
-    // Hierarchical check
     let currentDir = isDirectory ? filePath : path.dirname(filePath);
     const absoluteRoot = path.resolve(root);
 
-    // Walk up from file directory to root
     while (true) {
       const relativeToCurrent = path.relative(currentDir, filePath);
       if (relativeToCurrent !== "") {
-        // If we are checking the directory itself against its own ignore file? No, files inside.
-        // But if we are checking a file `a/b.txt`, and we are at `a`, relative is `b.txt`.
-        // If we are at `root`, relative is `a/b.txt`.
         const normalizedRelative = relativeToCurrent.replace(/\\/g, "/");
         const pathToCheck = isDirectory
           ? `${normalizedRelative}/`
           : normalizedRelative;
 
         const filter = this.getDirectoryIgnoreFilter(currentDir);
-
-        // Use internal test() method if available to distinguish ignored vs unignored
         const result = filter.test(pathToCheck);
         if (result.ignored) {
           return true;
@@ -194,11 +368,39 @@ export class NodeFileSystem implements FileSystem {
         break;
       }
       const parent = path.dirname(currentDir);
-      if (parent === currentDir) break; // Safety break for root of fs
+      if (parent === currentDir) break;
       currentDir = parent;
     }
 
     return false;
+  }
+
+  isIgnored(filePath: string, root: string): boolean {
+    if (this.hasHiddenParentDirectory(filePath, root)) {
+      return true;
+    }
+
+    let isDirectory = false;
+    try {
+      const stat = fs.statSync(filePath);
+      isDirectory = stat.isDirectory();
+    } catch {
+      isDirectory = false;
+    }
+
+    const basename = path.basename(filePath);
+    if (isDirectory) {
+      if (isHiddenSegment(basename)) {
+        return true;
+      }
+      return this.isIgnoredByPatterns(filePath, root, true);
+    }
+
+    if (!this.isAllowedFile(filePath)) {
+      return true;
+    }
+
+    return this.isIgnoredByPatterns(filePath, root, false);
   }
 
   loadMgrepignore(dirRoot: string): void {

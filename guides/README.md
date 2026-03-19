@@ -353,23 +353,190 @@ This fork is local-repo search only.
 - No image search support
 - Non-text and binary files are skipped
 
-`mgrep` is text-first and works best on code, docs, config, and other plain-text repository content.
+`mgrep` is text-first and allowlist-first. A file is indexed only if it:
 
-Built-in ignore patterns skip several file types by default, including:
+1. matches `allowedExtensions`, `allowedNames`, or `allowedDotfiles`
+2. is not inside a hidden directory
+3. is not excluded by `.gitignore`, `.mgrepignore`, or `ignorePatterns`
+4. passes text or binary detection
 
-- `*.lock`
+This means the paradigm has shifted from ignore-first filtering to
+allowlist-first permissioning.
+
+### Default Indexed Files
+
+Config and structured text:
+
+- `cfg`
+- `conf`
+- `hjson`
+- `ini`
+- `json`
+- `json5`
+- `jsonc`
+- `properties`
+- `toml`
+- `yaml`
+- `yml`
+
+Developer artifacts:
+
+- `diff`
+- `http`
+- `log`
+- `mermaid`
+- `mmd`
+- `patch`
+- `plantuml`
+- `po`
+- `pot`
+- `puml`
+- `rest`
+
+Docs and notes:
+
+- `adoc`
+- `asciidoc`
+- `md`
+- `mdx`
+- `rst`
+- `txt`
+
+Exact filenames:
+
+- `Brewfile`
+- `CHANGELOG`
+- `config`
+- `Config`
+- `Containerfile`
+- `COPYING`
+- `Dockerfile`
+- `Earthfile`
+- `GNUmakefile`
+- `Jenkinsfile`
+- `Justfile`
+- `justfile`
+- `LICENSE`
+- `Makefile`
+- `makefile`
+- `NOTICE`
+- `Pipfile`
+- `Procfile`
+- `README`
+- `Snakefile`
+- `Tiltfile`
+- `Vagrantfile`
+
+Exact hidden basenames:
+
+- `.bumpversion.cfg`
+- `.coveragerc`
+- `.dockerignore`
+- `.editorconfig`
+- `.eslintignore`
+- `.eslintrc`
+- `.flake8`
+- `.gitattributes`
+- `.gitignore`
+- `.gitmodules`
+- `.isort.cfg`
+- `.mypy.ini`
+- `.pre-commit-config.yaml`
+- `.prettierrc`
+- `.pylintrc`
+- `.pyre_configuration`
+- `.python-version`
+- `.ruff.toml`
+- `.tool-versions`
+- `.yamllint`
+
+Markup and templates:
+
+- `css`
+- `htm`
+- `html`
+- `j2`
+- `jinja`
+- `jinja2`
+- `less`
+- `sass`
+- `scss`
+- `template`
+- `tmpl`
+- `tpl`
+- `xml`
+- `xsd`
+- `xsl`
+- `xslt`
+
+Python and related:
+
+- `ipynb`
+- `pxd`
+- `pxi`
+- `py`
+- `pyi`
+- `pyw`
+- `pyx`
+
+Queries and infra:
+
+- `cmake`
+- `cue`
+- `gql`
+- `graphql`
+- `graphqls`
+- `hcl`
+- `mk`
+- `nix`
+- `proto`
+- `rego`
+- `sql`
+- `tf`
+- `tfvars`
+
+Shell and automation:
+
+- `bash`
+- `csh`
+- `fish`
+- `ksh`
+- `ps1`
+- `psm1`
+- `sh`
+- `tcsh`
+- `zsh`
+
+Web and mixed-language repo text:
+
+- `cjs`
+- `cts`
+- `js`
+- `jsx`
+- `mjs`
+- `mts`
+- `svelte`
+- `ts`
+- `tsx`
+- `vue`
+
+### Default Deny Patterns
+
 - `*.bin`
-- `*.ipynb`
+- `*.lock`
+- `*.pt`
 - `*.pyc`
 - `*.safetensors`
 - `*.sqlite`
-- `*.pt`
 
-It also respects:
+These patterns still apply after allowlist admission.
+
+### Important Notes
 
 - `.gitignore`
 - `.mgrepignore`
-- hidden files
+- Hidden directories such as `.github/` remain excluded by default
+- `.doc` and `.docx` are not indexed in the current fork because ingestion is still text-only
 
 ## Configuration Examples
 
@@ -390,13 +557,161 @@ mgrep watch --max-file-count 5000
 Create `.mgreprc.yaml`:
 
 ```yaml
-maxFileSize: 5242880
-maxFileCount: 5000
-syncConcurrency: 10
+maxFileSize: 4194304
+maxFileCount: 10000
+syncConcurrency: 20
+lancedbPath: ~/.mgrep/lancedb
 embedModel: Qwen/Qwen3-Embedding-4B
 embedDimensions: 2560
 rerankModel: Qwen/Qwen3-Reranker-4B
 llmModel: MiniMaxAI/MiniMax-M2.5
+
+allowedExtensions:
+  # Config and structured text
+  - cfg
+  - conf
+  - hjson
+  - ini
+  - json
+  - json5
+  - jsonc
+  - properties
+  - toml
+  - yaml
+  - yml
+  # Developer artifacts
+  - diff
+  - http
+  - log
+  - mermaid
+  - mmd
+  - patch
+  - plantuml
+  - po
+  - pot
+  - puml
+  - rest
+  # Docs and notes
+  - adoc
+  - asciidoc
+  - md
+  - mdx
+  - rst
+  - txt
+  # Markup and templates
+  - css
+  - htm
+  - html
+  - j2
+  - jinja
+  - jinja2
+  - less
+  - sass
+  - scss
+  - template
+  - tmpl
+  - tpl
+  - xml
+  - xsd
+  - xsl
+  - xslt
+  # Python and related
+  - ipynb
+  - pxd
+  - pxi
+  - py
+  - pyi
+  - pyw
+  - pyx
+  # Queries and infra
+  - cmake
+  - cue
+  - gql
+  - graphql
+  - graphqls
+  - hcl
+  - mk
+  - nix
+  - proto
+  - rego
+  - sql
+  - tf
+  - tfvars
+  # Shell and automation
+  - bash
+  - csh
+  - fish
+  - ksh
+  - ps1
+  - psm1
+  - sh
+  - tcsh
+  - zsh
+  # Web and mixed-language repo text
+  - cjs
+  - cts
+  - js
+  - jsx
+  - mjs
+  - mts
+  - svelte
+  - ts
+  - tsx
+  - vue
+
+allowedNames:
+  - Brewfile
+  - CHANGELOG
+  - config
+  - Config
+  - Containerfile
+  - COPYING
+  - Dockerfile
+  - Earthfile
+  - GNUmakefile
+  - Jenkinsfile
+  - Justfile
+  - justfile
+  - LICENSE
+  - Makefile
+  - makefile
+  - NOTICE
+  - Pipfile
+  - Procfile
+  - README
+  - Snakefile
+  - Tiltfile
+  - Vagrantfile
+
+allowedDotfiles:
+  - .bumpversion.cfg
+  - .coveragerc
+  - .dockerignore
+  - .editorconfig
+  - .eslintignore
+  - .eslintrc
+  - .flake8
+  - .gitattributes
+  - .gitignore
+  - .gitmodules
+  - .isort.cfg
+  - .mypy.ini
+  - .pre-commit-config.yaml
+  - .prettierrc
+  - .pylintrc
+  - .pyre_configuration
+  - .python-version
+  - .ruff.toml
+  - .tool-versions
+  - .yamllint
+
+ignorePatterns:
+  - "*.bin"
+  - "*.lock"
+  - "*.pt"
+  - "*.pyc"
+  - "*.safetensors"
+  - "*.sqlite"
 ```
 
 ## Troubleshooting
@@ -415,9 +730,14 @@ mgrep validate
 
 Run them from a specific project subdirectory instead.
 
-### Non-text files do not appear
+### Why a file may not be indexed
 
-That is expected in the current fork. `mgrep` skips non-text and binary content.
+A file can be skipped because:
+
+- its extension or basename is not allowlisted
+- it lives under a hidden directory such as `.github/`
+- `.gitignore`, `.mgrepignore`, or `ignorePatterns` exclude it
+- it is binary or non-text
 
 ### Results feel stale
 

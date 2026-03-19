@@ -74,7 +74,9 @@ function toolError(message: string): CallToolResult {
   };
 }
 
-function toolSuccess(structuredContent: Record<string, unknown>): CallToolResult {
+function toolSuccess(
+  structuredContent: Record<string, unknown>,
+): CallToolResult {
   return {
     content: [
       {
@@ -249,7 +251,8 @@ function toolDefinitions() {
     },
     {
       name: "status",
-      description: "Inspect whether a store exists and return its current metadata.",
+      description:
+        "Inspect whether a store exists and return its current metadata.",
       inputSchema: {
         type: "object",
         additionalProperties: false,
