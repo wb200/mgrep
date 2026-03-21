@@ -88,6 +88,14 @@ teardown() {
     assert_output --partial 'DEEPINFRA_API_KEY is not set'
 }
 
+@test "Chunking makes forward progress when overlap exceeds chunk span" {
+    run node --input-type=module -e "const { chunkTextForTesting } = await import('$DIR/../dist/lib/store.js'); const content = Array.from({ length: 10 }, () => 'x'.repeat(1200)).join('\n'); const chunks = chunkTextForTesting('transcript.md', content); console.log(chunks.length); console.log(chunks.map((chunk) => chunk.start_line).join(','))"
+
+    assert_success
+    assert_line --index 0 '10'
+    assert_line --index 1 '0,1,2,3,4,5,6,7,8,9'
+}
+
 @test "Search" {
     run mgrep search test
 

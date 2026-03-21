@@ -223,11 +223,16 @@ function chunkText(
       break;
     }
 
-    start = Math.max(0, end - overlapLines);
+    // Dense long-line documents can produce chunks that are shorter than the
+    // configured overlap. Clamp the next start so each iteration still
+    // advances; otherwise we can keep re-chunking the same slice forever.
+    start = Math.max(start + 1, end - overlapLines);
   }
 
   return chunks;
 }
+
+export const chunkTextForTesting = chunkText;
 
 function candidateLimit(topK: number): number {
   return Math.max(MIN_CANDIDATES, topK * CANDIDATE_MULTIPLIER);
