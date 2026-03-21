@@ -36,6 +36,7 @@ const ConfigSchema = z.object({
   allowedNames: z.array(z.string().min(1)).optional(),
   allowedDotfiles: z.array(z.string().min(1)).optional(),
   ignorePatterns: z.array(z.string().min(1)).optional(),
+  blockedPaths: z.array(z.string().min(1)).optional(),
 });
 
 /**
@@ -114,7 +115,14 @@ export interface MgrepConfig {
    * Additional glob patterns that denylist files after allowlist admission.
    */
   ignorePatterns: string[];
+
+  /**
+   * Absolute path prefixes that are always excluded from indexing.
+   */
+  blockedPaths: string[];
 }
+
+const DEFAULT_BLOCKED_PATHS: readonly string[] = [];
 
 const DEFAULT_CONFIG: MgrepConfig = {
   maxFileSize: DEFAULT_MAX_FILE_SIZE,
@@ -129,6 +137,7 @@ const DEFAULT_CONFIG: MgrepConfig = {
   allowedNames: [...DEFAULT_ALLOWED_NAMES],
   allowedDotfiles: [...DEFAULT_ALLOWED_DOTFILES],
   ignorePatterns: [...DEFAULT_IGNORE_PATTERNS],
+  blockedPaths: [...DEFAULT_BLOCKED_PATHS],
 };
 
 const configCache = new Map<string, MgrepConfig>();
@@ -139,6 +148,29 @@ const configCache = new Map<string, MgrepConfig>();
  * @param filePath - The path to the config file
  * @returns The parsed config object or null if file doesn't exist or is invalid
  */
+function resolveConfigPath(value: string, baseDir: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  if (trimmed === "~") {
+    return os.homedir();
+  }
+
+  if (trimmed.startsWith("~/")) {
+    return path.join(os.homedir(), trimmed.slice(2));
+  }
+
+  return path.resolve(baseDir, trimmed);
+}
+
+function normalizePathList(values: readonly string[]): string[] {
+  return Array.from(
+    new Set(values.map((value) => path.resolve(value.trim())).filter(Boolean)),
+  );
+}
+
 function readYamlConfig(filePath: string): Partial<MgrepConfig> | null {
   if (!fs.existsSync(filePath)) {
     return null;
@@ -148,7 +180,12 @@ function readYamlConfig(filePath: string): Partial<MgrepConfig> | null {
     const content = fs.readFileSync(filePath, "utf-8");
     const parsed = YAML.parse(content);
     const validated = ConfigSchema.parse(parsed);
-    return validated;
+    return {
+      ...validated,
+      blockedPaths: validated.blockedPaths?.map((value) =>
+        resolveConfigPath(value, path.dirname(filePath)),
+      ),
+    };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.warn(
@@ -187,6 +224,7 @@ function normalizeConfig(config: MgrepConfig): MgrepConfig {
       normalizeDotfile,
     ),
     ignorePatterns: normalizeUnique(config.ignorePatterns),
+    blockedPaths: normalizePathList(config.blockedPaths),
   };
 }
 
@@ -315,6 +353,11 @@ export function loadConfig(
       ...DEFAULT_IGNORE_PATTERNS,
       ...(globalConfig?.ignorePatterns ?? []),
       ...(localConfig?.ignorePatterns ?? []),
+    ],
+    blockedPaths: [
+      ...DEFAULT_BLOCKED_PATHS,
+      ...(globalConfig?.blockedPaths ?? []),
+      ...(localConfig?.blockedPaths ?? []),
     ],
   };
 

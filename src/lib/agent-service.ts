@@ -177,6 +177,7 @@ export async function executeSync(
   });
   const fileSystem = createFileSystem({
     ignorePatterns: config.ignorePatterns,
+    blockedPaths: config.blockedPaths,
     allowedExtensions: config.allowedExtensions,
     allowedNames: config.allowedNames,
     allowedDotfiles: config.allowedDotfiles,

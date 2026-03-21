@@ -242,6 +242,77 @@ teardown() {
     refute_output --partial 'test.log'
 }
 
+@test "Config blockedPaths excludes descendants from watch" {
+    mkdir -p "$BATS_TMPDIR/test-store/private/nested"
+    mkdir -p "$BATS_TMPDIR/test-store/public"
+    cat > "$BATS_TMPDIR/test-store/.mgreprc.yaml" <<'EOF'
+blockedPaths:
+  - private
+EOF
+    echo "blocked by config" > "$BATS_TMPDIR/test-store/private/blocked.txt"
+    echo "blocked nested by config" > "$BATS_TMPDIR/test-store/private/nested/blocked-nested.txt"
+    echo "allowed by config" > "$BATS_TMPDIR/test-store/public/allowed.txt"
+
+    cd "$BATS_TMPDIR/test-store"
+    run mgrep watch --dry-run
+
+    assert_success
+    assert_output --partial 'allowed.txt'
+    refute_output --partial 'blocked.txt'
+    refute_output --partial 'blocked-nested.txt'
+}
+
+@test "Config blockedPaths expands tilde-prefixed paths" {
+    export HOME="$BATS_TMPDIR/home"
+    mkdir -p "$HOME/.config/mgrep"
+    mkdir -p "$HOME/projects/scrape/docs/nested"
+    mkdir -p "$HOME/projects/scrape/src"
+    cat > "$HOME/.config/mgrep/config.yaml" <<'EOF'
+blockedPaths:
+  - ~/projects/scrape/docs
+EOF
+    echo "blocked root doc" > "$HOME/projects/scrape/docs/blocked.txt"
+    echo "blocked nested doc" > "$HOME/projects/scrape/docs/nested/blocked-nested.txt"
+    echo "allowed source file" > "$HOME/projects/scrape/src/allowed.txt"
+
+    cd "$HOME/projects/scrape"
+    run mgrep watch --dry-run
+
+    assert_success
+    assert_output --partial 'allowed.txt'
+    refute_output --partial 'blocked.txt'
+    refute_output --partial 'blocked-nested.txt'
+}
+
+@test "Rules command shows effective blocked paths" {
+    export HOME="$BATS_TMPDIR/home"
+    mkdir -p "$HOME/.config/mgrep"
+    cat > "$HOME/.config/mgrep/config.yaml" <<'EOF'
+ignorePatterns:
+  - "*.cache"
+blockedPaths:
+  - ~/shared/private
+EOF
+
+    mkdir -p "$BATS_TMPDIR/rules-project/private"
+    cat > "$BATS_TMPDIR/rules-project/.mgreprc.yaml" <<'EOF'
+blockedPaths:
+  - private
+EOF
+
+    cd "$BATS_TMPDIR/rules-project"
+    run mgrep rules --json
+
+    assert_success
+    assert_output --partial "\"root\": \"$BATS_TMPDIR/rules-project\""
+    assert_output --partial "\"ignorePatterns\": ["
+    assert_output --partial "*.cache"
+    assert_output --partial "$HOME/shared/private"
+    assert_output --partial "$BATS_TMPDIR/rules-project/private"
+    assert_output --partial ".mgreprc.yaml"
+    assert_output --partial "config.yaml"
+}
+
 @test "Search with no rerank" {
     run mgrep search -c --no-rerank test
 

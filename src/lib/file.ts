@@ -150,6 +150,24 @@ export const DEFAULT_IGNORE_PATTERNS: readonly string[] = [
   "*.pt",
 ];
 
+function isSameOrDescendantPath(
+  candidatePath: string,
+  parentPath: string,
+): boolean {
+  const resolvedCandidate = path.resolve(candidatePath);
+  const resolvedParent = path.resolve(parentPath);
+
+  if (resolvedCandidate === resolvedParent) {
+    return true;
+  }
+
+  const parentWithSep = resolvedParent.endsWith(path.sep)
+    ? resolvedParent
+    : `${resolvedParent}${path.sep}`;
+
+  return resolvedCandidate.startsWith(parentWithSep);
+}
+
 function normalizeExtension(value: string): string {
   return value.trim().replace(/^\./, "").toLowerCase();
 }
@@ -180,6 +198,11 @@ export interface FileSystemOptions {
    * Additional glob patterns to ignore after allowlist admission.
    */
   ignorePatterns?: string[];
+
+  /**
+   * Absolute path prefixes that are always excluded from indexing.
+   */
+  blockedPaths?: string[];
 
   /**
    * Allowed file extensions for text indexing.
@@ -226,6 +249,7 @@ export class NodeFileSystem implements FileSystem {
   private allowedExtensions: Set<string>;
   private allowedNames: Set<string>;
   private allowedDotfiles: Set<string>;
+  private blockedPaths: string[];
 
   constructor(
     private git: Git,
@@ -239,6 +263,9 @@ export class NodeFileSystem implements FileSystem {
     this.allowedNames = new Set(normalizeUnique(options.allowedNames ?? []));
     this.allowedDotfiles = new Set(
       normalizeUnique(options.allowedDotfiles ?? []).map(normalizeDotfile),
+    );
+    this.blockedPaths = normalizeUnique(options.blockedPaths ?? []).map(
+      (value) => path.resolve(value),
     );
   }
 
@@ -376,6 +403,14 @@ export class NodeFileSystem implements FileSystem {
   }
 
   isIgnored(filePath: string, root: string): boolean {
+    if (
+      this.blockedPaths.some((blockedPath) =>
+        isSameOrDescendantPath(filePath, blockedPath),
+      )
+    ) {
+      return true;
+    }
+
     if (this.hasHiddenParentDirectory(filePath, root)) {
       return true;
     }

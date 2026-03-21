@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { program } from "commander";
 import { validate } from "./commands/login.js";
+import { rules } from "./commands/rules.js";
 import { search } from "./commands/search.js";
 import { watch } from "./commands/watch.js";
 import { watchMcp } from "./commands/watch_mcp.js";
@@ -36,6 +37,7 @@ program
   );
 
 program.addCommand(search, { isDefault: true });
+program.addCommand(rules);
 program.addCommand(watch);
 program.addCommand(installClaudeCode);
 program.addCommand(uninstallClaudeCode);

@@ -20,6 +20,14 @@ Then validate:
 mgrep validate
 ```
 
+## Config Locations
+
+- Project-local: `.mgreprc.yaml` or `.mgreprc.yml` in the directory you are indexing/searching from
+- Global: `~/.config/mgrep/config.yaml` or `~/.config/mgrep/config.yml`
+
+Use the project-local file for repo-specific rules. Use the global file for
+defaults you want across projects.
+
 ## Core Workflow
 
 The normal workflow is:
@@ -71,6 +79,19 @@ If you want to preview work without uploading:
 ```bash
 mgrep watch --dry-run
 ```
+
+### Inspect the effective indexing rules
+
+```bash
+mgrep rules
+mgrep rules --json
+```
+
+Use this when you want to see the current merged:
+
+- allowlists for extensions, exact names, and dotfiles
+- `ignorePatterns` and `blockedPaths`
+- local and global config files affecting the current directory
 
 ### Search semantically
 
@@ -126,6 +147,37 @@ mgrep --sync --dry-run "search query"
 ```
 
 This shows what would be uploaded or deleted before actually changing the local store.
+
+### Manage allow/block lists
+
+Use config files to control indexing behavior:
+
+- project-local: `.mgreprc.yaml` or `.mgreprc.yml`
+- global: `~/.config/mgrep/config.yaml` or `~/.config/mgrep/config.yml`
+
+Example:
+
+```yaml
+blockedPaths:
+  - private
+  - ~/scratch/generated-docs
+
+ignorePatterns:
+  - "*.cache"
+  - "*.jsonl"
+
+allowedExtensions:
+  - ts
+  - tsx
+  - md
+```
+
+`blockedPaths` excludes whole path prefixes from indexing. Entries may be
+relative to the config file, absolute, or `~/...`.
+
+`ignorePatterns` is for glob-style filtering after allowlist admission.
+
+Use `mgrep rules` after changes to confirm the effective result.
 
 ## Understanding Stores In Practice
 
@@ -340,6 +392,11 @@ mgrep install-claude-code
 mgrep install-codex
 mgrep install-opencode
 mgrep install-droid
+mgrep uninstall-claude-code
+mgrep uninstall-codex
+mgrep uninstall-opencode
+mgrep uninstall-droid
+mgrep mcp
 ```
 
 These integrations are designed around local search plus background indexing. Some of them start background sync automatically for agent sessions.
@@ -356,9 +413,10 @@ This fork is local-repo search only.
 `mgrep` is text-first and allowlist-first. A file is indexed only if it:
 
 1. matches `allowedExtensions`, `allowedNames`, or `allowedDotfiles`
-2. is not inside a hidden directory
-3. is not excluded by `.gitignore`, `.mgrepignore`, or `ignorePatterns`
-4. passes text or binary detection
+2. is not excluded by `blockedPaths`
+3. is not inside a hidden directory
+4. is not excluded by `.gitignore`, `.mgrepignore`, or `ignorePatterns`
+5. passes text or binary detection
 
 This means the paradigm has shifted from ignore-first filtering to
 allowlist-first permissioning.
@@ -533,6 +591,8 @@ These patterns still apply after allowlist admission.
 
 ### Important Notes
 
+- `blockedPaths` has no built-in default entries in a general installation
+- Use `mgrep rules` to inspect the effective allow/block state
 - `.gitignore`
 - `.mgrepignore`
 - Hidden directories such as `.github/` remain excluded by default
@@ -565,6 +625,10 @@ embedModel: Qwen/Qwen3-Embedding-4B
 embedDimensions: 2560
 rerankModel: Qwen/Qwen3-Reranker-4B
 llmModel: MiniMaxAI/MiniMax-M2.5
+
+blockedPaths:
+  - private
+  - ~/scratch/generated-docs
 
 allowedExtensions:
   # Config and structured text
@@ -714,6 +778,10 @@ ignorePatterns:
   - "*.sqlite"
 ```
 
+Use `blockedPaths` when you want to exclude a directory subtree or path prefix
+regardless of file names. Relative entries are resolved from the config file
+location.
+
 ## Troubleshooting
 
 ### Missing API keys
@@ -735,9 +803,16 @@ Run them from a specific project subdirectory instead.
 A file can be skipped because:
 
 - its extension or basename is not allowlisted
+- it is excluded by `blockedPaths`
 - it lives under a hidden directory such as `.github/`
 - `.gitignore`, `.mgrepignore`, or `ignorePatterns` exclude it
 - it is binary or non-text
+
+To inspect the effective merged rules for the current directory:
+
+```bash
+mgrep rules
+```
 
 ### Results feel stale
 

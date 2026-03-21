@@ -45,13 +45,22 @@ mgrep -a "how does the sync pipeline work?"
    mgrep validate
    ```
 
-4. **Index a project**
+4. **Know where config lives**
+   - Project-local: `.mgreprc.yaml` or `.mgreprc.yml` in the directory you are indexing/searching from
+   - Global: `~/.config/mgrep/config.yaml` or `~/.config/mgrep/config.yml`
+
+5. **Index a project**
    ```bash
    cd path/to/repo
    mgrep watch
    ```
 
-5. **Search**
+6. **Inspect the effective indexing rules**
+   ```bash
+   mgrep rules
+   ```
+
+7. **Search**
    ```bash
    mgrep "where do we set up auth?"
    mgrep -m 25 "store schema"
@@ -63,6 +72,7 @@ mgrep -a "how does the sync pipeline work?"
 `mgrep` keeps a local searchable index of your repository.
 
 - Indexing is allowlist-first. A file must match an allowed extension, exact basename, or exact hidden basename before it is eligible for indexing.
+- Configured `blockedPaths` can exclude path prefixes regardless of filename.
 - After allowlist admission, `.gitignore`, `.mgrepignore`, built-in deny patterns, hidden-directory blocking, and text-file detection can still exclude it.
 - Indexed content is chunked and stored locally in LanceDB.
 - Embeddings, reranking, answer synthesis, and agentic planning are done through DeepInfra.
@@ -84,6 +94,7 @@ A common workflow is to use `mgrep` first to find candidate files or concepts, t
 Top-level commands:
 
 - `mgrep` or `mgrep search <pattern> [path]`
+- `mgrep rules [path]`
 - `mgrep watch`
 - `mgrep validate`
 - `mgrep install-claude-code`
@@ -340,6 +351,33 @@ mgrep watch --max-file-size 1048576
 mgrep watch --max-file-count 5000
 ```
 
+### `mgrep rules`
+
+`mgrep rules` shows the effective allow/block indexing logic for the current
+directory after merging defaults, global config, and local config.
+
+Arguments:
+
+- `[path]`: optional directory or file path to inspect
+
+Options:
+
+- `--json`: emit the effective rules as JSON
+
+Examples:
+
+```bash
+mgrep rules
+mgrep rules --json
+mgrep rules src
+```
+
+Use this when you want to confirm:
+
+- the effective allowlists for extensions, exact names, and dotfiles
+- the effective `ignorePatterns` and `blockedPaths`
+- which local and global config files are currently being applied
+
 ### `mgrep validate`
 
 Validates the DeepInfra configuration by exercising embeddings, rerank, and chat completions.
@@ -348,14 +386,18 @@ Validates the DeepInfra configuration by exercising embeddings, rerank, and chat
 mgrep validate
 ```
 
-### Agent Install Commands
+### Agent Integration Commands
 
 `mgrep` includes helper installers for several agent environments:
 
 - `mgrep install-claude-code`
+- `mgrep uninstall-claude-code`
 - `mgrep install-codex`
+- `mgrep uninstall-codex`
 - `mgrep install-opencode`
+- `mgrep uninstall-opencode`
 - `mgrep install-droid`
+- `mgrep uninstall-droid`
 
 These integrations are focused on local search plus background indexing. After installation, `mgrep` warns that background sync will run automatically for supported agent flows.
 
@@ -375,6 +417,14 @@ Configuration sources, highest precedence first:
 4. Global config file: `~/.config/mgrep/config.yaml` or `~/.config/mgrep/config.yml`
 5. Built-in defaults
 
+### Config Locations
+
+- Project-local: `.mgreprc.yaml` or `.mgreprc.yml` in the directory you are indexing/searching from
+- Global: `~/.config/mgrep/config.yaml` or `~/.config/mgrep/config.yml`
+
+Use the project-local file when you want rules that only apply to one repo or
+workspace. Use the global file when you want defaults applied across projects.
+
 ### Config File
 
 Example override:
@@ -387,10 +437,24 @@ current default allowlist and a full ready-to-paste `.mgreprc.yaml`, see
 maxFileSize: 5242880
 maxFileCount: 5000
 syncConcurrency: 10
+blockedPaths:
+  - private
+  - ~/scratch/generated-docs
 ignorePatterns:
   - "*.csv"
   - "*.jsonl"
 ```
+
+`blockedPaths` is for path-prefix exclusions that should always be skipped.
+Entries may be:
+
+- relative paths, resolved relative to the config file that defines them
+- absolute paths
+- `~/...` paths expanded against the current home directory
+
+Use `ignorePatterns` for glob-style filename/path filtering after allowlist
+admission. Use `blockedPaths` when you want to exclude a directory subtree or
+specific path prefix regardless of file naming.
 
 Defaults:
 
@@ -402,6 +466,7 @@ Defaults:
 - `embedDimensions`: `2560`
 - `rerankModel`: `Qwen/Qwen3-Reranker-4B`
 - `llmModel`: `MiniMaxAI/MiniMax-M2.5`
+- `blockedPaths`: empty by default
 
 ### Environment Variables
 
@@ -442,6 +507,7 @@ Model overrides:
 
 - `mgrep` is text-first and allowlist-first.
 - A file must match an allowed extension, exact basename, or exact hidden basename before it is eligible for indexing.
+- Configured `blockedPaths` are always excluded from indexing.
 - Hidden directories remain excluded by default, even if a file inside them would otherwise match the allowlist.
 - Default indexed content spans config and structured text, developer artifacts, docs and notes, exact filenames, exact hidden basenames, markup and templates, Python and related files, queries and infra, shell and automation, and web or mixed-language repo text.
 - Built-in deny patterns include `*.bin`, `*.lock`, `*.pt`, `*.pyc`, `*.safetensors`, and `*.sqlite`.
@@ -487,7 +553,8 @@ The built CLI entrypoint is `dist/index.js`.
 
 - Missing API keys: run `mgrep validate`
 - Sync blocked at home directory: run from a specific project subdirectory
-- Why a file may not be indexed: it may be outside the allowlist, inside a hidden directory, excluded by `.gitignore`, `.mgrepignore`, or `ignorePatterns`, or rejected as binary or non-text
+- Inspect current indexing rules: run `mgrep rules` or `mgrep rules --json`
+- Why a file may not be indexed: it may be outside the allowlist, inside a hidden directory, excluded by `blockedPaths`, `.gitignore`, `.mgrepignore`, or `ignorePatterns`, or rejected as binary or non-text
 - Store incompatibility after changing embedding settings: delete the affected store under `~/.mgrep/lancedb/<store-name>/` and re-index
 - Slow initial indexing: lower `syncConcurrency` if you are rate-limited, or tune file limits for very large repos
 
