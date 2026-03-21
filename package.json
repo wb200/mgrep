@@ -1,6 +1,6 @@
 {
   "name": "@wb200/mgrep",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "type": "module",
   "author": "wb200",
   "homepage": "https://github.com/wb200/mgrep",
@@ -16,6 +16,8 @@
     "mgrep": "dist/index.js"
   },
   "scripts": {
+    "sync:plugin-versions": "node scripts/sync-claude-plugin-version.mjs",
+    "prebuild": "npm run sync:plugin-versions",
     "build": "tsc",
     "postbuild": "chmod +x dist/index.js && cp -r plugins dist/",
     "dev": "npx tsc && node dist/index.js",

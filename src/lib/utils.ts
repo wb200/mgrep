@@ -177,15 +177,27 @@ export async function uploadFile(
   filePath: string,
   fileName: string,
   config?: MgrepConfig,
+  preloaded?: { buffer: Buffer; stat: fs.Stats },
+  deferIndexing = false,
 ): Promise<boolean> {
-  if (config && exceedsMaxFileSize(filePath, config.maxFileSize)) {
-    return false;
+  // Use preloaded stat for size check to avoid a redundant statSync.
+  if (config) {
+    const fileSize = preloaded
+      ? preloaded.stat.size
+      : fs.statSync(filePath).size;
+    if (fileSize > config.maxFileSize) {
+      return false;
+    }
   }
 
-  const [buffer, stat] = await Promise.all([
-    fs.promises.readFile(filePath),
-    fs.promises.stat(filePath),
-  ]);
+  // Reuse caller-supplied buffer+stat when available (avoids a second readFile).
+  const [buffer, stat] = preloaded
+    ? [preloaded.buffer, preloaded.stat]
+    : await Promise.all([
+        fs.promises.readFile(filePath),
+        fs.promises.stat(filePath),
+      ]);
+
   if (buffer.length === 0) {
     return false;
   }
@@ -203,11 +215,14 @@ export async function uploadFile(
       hash,
       mtime: stat.mtimeMs,
     },
+    deferIndexing,
   };
 
   await store.uploadFile(
     storeId,
-    new File([buffer], fileName, { type: "text/plain" }),
+    // Wrap in Uint8Array so TypeScript accepts it as BlobPart; File copies the
+    // data regardless, so this is zero extra overhead in practice.
+    new File([new Uint8Array(buffer)], fileName, { type: "text/plain" }),
     options,
   );
   return true;
@@ -268,89 +283,105 @@ export async function initialSync(
   let deleted = 0;
   let errors = 0;
 
-  const concurrency = config?.syncConcurrency ?? 20;
+  const concurrency = config?.syncConcurrency ?? 5;
   const limit = pLimit(concurrency);
 
-  await Promise.all([
-    ...repoFiles.map((filePath) =>
-      limit(async () => {
-        try {
-          if (config && exceedsMaxFileSize(filePath, config.maxFileSize)) {
-            processed += 1;
-            onProgress?.({
-              processed,
-              uploaded,
-              deleted,
-              errors,
-              total,
-              filePath,
-            });
-            return;
-          }
-
-          const stored = storeMetadata.get(filePath);
-          const stat = await fs.promises.stat(filePath);
-
-          // Bloom filter: if mtime unchanged, file definitely unchanged
-          if (stored?.mtime && stat.mtimeMs <= stored.mtime) {
-            processed += 1;
-            onProgress?.({
-              processed,
-              uploaded,
-              deleted,
-              errors,
-              total,
-              filePath,
-            });
-            return;
-          }
-
-          // mtime changed or no stored mtime - need to check hash
-          const buffer = await fs.promises.readFile(filePath);
-          processed += 1;
-          const hashMatches = stored?.hash
-            ? await hashesMatch(stored.hash, buffer)
-            : false;
-          const shouldUpload = !hashMatches;
-          if (dryRun && shouldUpload) {
-            console.log("Dry run: would have uploaded", filePath);
-            uploaded += 1;
-          } else if (shouldUpload) {
-            const didUpload = await uploadFile(
-              store,
-              storeId,
-              filePath,
-              path.basename(filePath),
-              config,
-            );
-            if (didUpload) {
-              uploaded += 1;
+  // Process uploads in fixed-size batches so that completed promise closures
+  // (and their captured buffers/vectors) are eligible for GC between batches,
+  // rather than being held alive for the entire run by a single Promise.all.
+  const UPLOAD_BATCH_SIZE = 50;
+  for (let i = 0; i < repoFiles.length; i += UPLOAD_BATCH_SIZE) {
+    const batch = repoFiles.slice(i, i + UPLOAD_BATCH_SIZE);
+    await Promise.all(
+      batch.map((filePath) =>
+        limit(async () => {
+          try {
+            if (config && exceedsMaxFileSize(filePath, config.maxFileSize)) {
+              processed += 1;
+              onProgress?.({
+                processed,
+                uploaded,
+                deleted,
+                errors,
+                total,
+                filePath,
+              });
+              return;
             }
+
+            const stored = storeMetadata.get(filePath);
+            const stat = await fs.promises.stat(filePath);
+
+            // Bloom filter: if mtime unchanged, file definitely unchanged
+            if (stored?.mtime && stat.mtimeMs <= stored.mtime) {
+              processed += 1;
+              onProgress?.({
+                processed,
+                uploaded,
+                deleted,
+                errors,
+                total,
+                filePath,
+              });
+              return;
+            }
+
+            // mtime changed or no stored mtime - need to check hash
+            const buffer = await fs.promises.readFile(filePath);
+            processed += 1;
+            const hashMatches = stored?.hash
+              ? await hashesMatch(stored.hash, buffer)
+              : false;
+            const shouldUpload = !hashMatches;
+            if (dryRun && shouldUpload) {
+              console.log("Dry run: would have uploaded", filePath);
+              uploaded += 1;
+            } else if (shouldUpload) {
+              // Pass the already-read buffer and stat to avoid a second readFile
+              // inside uploadFile. Pass deferIndexing=true so FTS index rebuild
+              // is skipped per-file; we rebuild once at the end of the full sync.
+              const didUpload = await uploadFile(
+                store,
+                storeId,
+                filePath,
+                path.basename(filePath),
+                config,
+                { buffer, stat },
+                true,
+              );
+              if (didUpload) {
+                uploaded += 1;
+              }
+            }
+            onProgress?.({
+              processed,
+              uploaded,
+              deleted,
+              errors,
+              total,
+              filePath,
+            });
+          } catch (err) {
+            errors += 1;
+            const errorMessage =
+              err instanceof Error ? err.message : String(err);
+            onProgress?.({
+              processed,
+              uploaded,
+              deleted,
+              errors,
+              total,
+              filePath,
+              lastError: errorMessage,
+            });
           }
-          onProgress?.({
-            processed,
-            uploaded,
-            deleted,
-            errors,
-            total,
-            filePath,
-          });
-        } catch (err) {
-          errors += 1;
-          const errorMessage = err instanceof Error ? err.message : String(err);
-          onProgress?.({
-            processed,
-            uploaded,
-            deleted,
-            errors,
-            total,
-            filePath,
-            lastError: errorMessage,
-          });
-        }
-      }),
-    ),
-    ...filesToDelete.map((filePath) =>
+        }),
+      ),
+    );
+  }
+
+  await Promise.all(
+    filesToDelete.map((filePath) =>
       limit(async () => {
         try {
           if (dryRun) {
@@ -384,7 +415,13 @@ export async function initialSync(
         }
       }),
     ),
-  ]);
+  );
+
+  // Rebuild search indices once after all uploads and deletes are complete,
+  // rather than after every individual file upload.
+  if (!dryRun) {
+    await store.ensureIndices(storeId);
+  }
 
   return { processed, uploaded, deleted, errors, total };
 }

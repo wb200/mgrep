@@ -58,6 +58,14 @@ teardown() {
     assert_output --regexp '^[0-9]+\.[0-9]+\.[0-9]+$'
 }
 
+@test "Claude plugin metadata versions match package version" {
+    run node --input-type=module -e "import fs from 'node:fs'; const pkg = JSON.parse(fs.readFileSync('$DIR/../package.json', 'utf-8')); const marketplace = JSON.parse(fs.readFileSync('$DIR/../.claude-plugin/marketplace.json', 'utf-8')); const plugin = JSON.parse(fs.readFileSync('$DIR/../plugins/mgrep/.claude-plugin/plugin.json', 'utf-8')); console.log(pkg.version); console.log(marketplace.plugins[0].version); console.log(plugin.version)"
+
+    assert_success
+    assert [ "$(echo "$output" | sed -n '1p')" = "$(echo "$output" | sed -n '2p')" ]
+    assert [ "$(echo "$output" | sed -n '1p')" = "$(echo "$output" | sed -n '3p')" ]
+}
+
 @test "Default llm model is MiniMaxAI/MiniMax-M2.5" {
     run node --input-type=module -e "delete process.env.MGREP_LLM_MODEL; const { loadConfig } = await import('$DIR/../dist/lib/config.js'); console.log(loadConfig(process.cwd()).llmModel)"
 
@@ -240,6 +248,48 @@ teardown() {
     assert_success
     assert_output --partial 'test.txt'
     refute_output --partial 'test.log'
+}
+
+@test "Watch falls back to polling after watcher ENOSPC" {
+    rm -rf "$BATS_TMPDIR/live-watch"
+    rm -f "$BATS_TMPDIR/mgrep-test-store.json"
+    mkdir -p "$BATS_TMPDIR/live-watch"
+    echo "hello" > "$BATS_TMPDIR/live-watch/test.txt"
+
+    run bash -lc "node --input-type=module -e \"
+      process.env.MGREP_IS_TEST = '1';
+      process.env.MGREP_TEST_STORE_PATH = '$BATS_TMPDIR/mgrep-test-store.json';
+      process.chdir('$BATS_TMPDIR/live-watch');
+      const { EventEmitter } = await import('node:events');
+      const fs = await import('node:fs/promises');
+      const { setWatchFactoryForTesting, setPollingIntervalMsForTesting, startWatch } = await import('$DIR/../dist/commands/watch.js');
+      setPollingIntervalMsForTesting(5);
+      setWatchFactoryForTesting(() => {
+        const watcher = new EventEmitter();
+        watcher.close = () => {};
+        setTimeout(() => {
+          const error = new Error('System limit for number of file watchers reached');
+          error.code = 'ENOSPC';
+          watcher.emit('error', error);
+        }, 0);
+        return watcher;
+      });
+      await startWatch({ store: 'watch-test', dryRun: false });
+      setTimeout(async () => {
+        await fs.writeFile('test-2.txt', 'poll me');
+      }, 10);
+      setTimeout(async () => {
+        const db = JSON.parse(await fs.readFile('$BATS_TMPDIR/mgrep-test-store.json', 'utf8'));
+        console.log(JSON.stringify(Object.keys(db.files).sort()));
+        process.exit(0);
+      }, 80);
+    \" 2>&1"
+
+    assert_success
+    assert_output --partial 'Watcher failed: System limit for number of file watchers reached'
+    assert_output --partial 'Falling back to polling every 5ms.'
+    assert_output --partial 'Polling sync complete'
+    assert_output --partial 'test-2.txt'
 }
 
 @test "Config blockedPaths excludes descendants from watch" {

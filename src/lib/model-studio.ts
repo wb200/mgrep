@@ -96,12 +96,12 @@ export class ModelStudioClient {
     return this.config.llmModel;
   }
 
-  async embed(texts: readonly string[]): Promise<number[][]> {
+  async embed(texts: readonly string[]): Promise<Float32Array[]> {
     if (texts.length === 0) {
       return [];
     }
 
-    const vectors: number[][] = [];
+    const vectors: Float32Array[] = [];
     for (const batch of chunkArray(texts, EMBEDDING_BATCH_SIZE)) {
       const response = await this.deepinfraClient.embeddings.create(
         {
@@ -113,7 +113,9 @@ export class ModelStudioClient {
         { signal: AbortSignal.timeout(API_TIMEOUT_MS) },
       );
       for (const item of response.data) {
-        vectors.push(item.embedding);
+        // Float32Array is backed by an ArrayBuffer (off V8 heap, 4 bytes/float
+        // vs 8 bytes for number[]), halving vector memory and removing V8 heap pressure.
+        vectors.push(new Float32Array(item.embedding));
       }
     }
 

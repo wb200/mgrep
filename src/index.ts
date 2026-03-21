@@ -1,8 +1,18 @@
 #!/usr/bin/env node
+import * as os from "node:os";
+import * as v8 from "node:v8";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { program } from "commander";
+
+// Bulk indexing (mgrep watch) reads hundreds of files simultaneously, computes
+// embedding vectors (Float32Array, off-heap), and drives LanceDB Arrow writes.
+// The default V8 heap ceiling (~4 GB) is too low for large document repositories.
+// Cap at 8 GB to avoid starving other processes on machines with less RAM.
+const totalMb = Math.round(os.totalmem() / 1024 / 1024);
+const heapLimitMb = Math.min(Math.floor(totalMb * 0.25), 8192);
+v8.setFlagsFromString(`--max-old-space-size=${heapLimitMb}`);
 import { validate } from "./commands/login.js";
 import { rules } from "./commands/rules.js";
 import { search } from "./commands/search.js";

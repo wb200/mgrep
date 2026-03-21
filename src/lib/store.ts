@@ -48,6 +48,8 @@ export interface UploadFileOptions {
   external_id: string;
   overwrite?: boolean;
   metadata?: FileMetadata;
+  /** When true, skip per-upload FTS index maintenance. Caller must invoke ensureIndices() after bulk operations. */
+  deferIndexing?: boolean;
 }
 
 export interface SearchResponse {
@@ -105,6 +107,8 @@ export interface Store {
     options: UploadFileOptions,
   ): Promise<void>;
   deleteFile(storeId: string, externalId: string): Promise<void>;
+  /** Ensures all search indices (FTS, vector) are up to date. Call once after bulk uploads. */
+  ensureIndices(storeId: string): Promise<void>;
   search(
     storeIds: string[],
     query: string,
@@ -152,7 +156,7 @@ interface ChunkRow {
   mtime: number;
   chunk_index: number;
   text: string;
-  vector: number[];
+  vector: Float32Array;
   start_line: number;
   num_lines: number;
 }
@@ -602,7 +606,16 @@ export class LanceStore implements Store {
     const chunksTable = await this.ensureChunksTable(storeId, chunkRows);
     await chunksTable.delete(`path = ${sqlString(metadata.path)}`);
     await chunksTable.add(chunkRows as unknown as Record<string, unknown>[]);
-    await this.ensureChunkIndices(chunksTable, storeId);
+    if (!options.deferIndexing) {
+      await this.ensureChunkIndices(chunksTable, storeId);
+    }
+  }
+
+  async ensureIndices(storeId: string): Promise<void> {
+    const chunksTable = await this.openTableIfExists(storeId, CHUNKS_TABLE);
+    if (chunksTable) {
+      await this.ensureChunkIndices(chunksTable, storeId);
+    }
   }
 
   async deleteFile(storeId: string, externalId: string): Promise<void> {
@@ -638,8 +651,12 @@ export class LanceStore implements Store {
     const limit = candidateLimit(topK);
     const predicate = prefixPredicate(extractPathPrefix(filters));
     const [queryVector] = await this.client.embed([query]);
+    // LanceDB's vectorSearch API expects number[]; convert the single query
+    // Float32Array (one vector, negligible cost) while stored chunk vectors
+    // remain as Float32Array (off V8 heap).
+    const queryVectorArray = Array.from(queryVector);
 
-    let vectorQuery = table.vectorSearch(queryVector).limit(limit);
+    let vectorQuery = table.vectorSearch(queryVectorArray).limit(limit);
     let ftsQuery = table.search(query, "fts", "text").limit(limit);
     if (predicate) {
       vectorQuery = vectorQuery.where(predicate);
@@ -948,6 +965,8 @@ export class TestStore implements Store {
       await this.save(db);
     });
   }
+
+  async ensureIndices(_storeId: string): Promise<void> {}
 
   async search(
     _storeIds: string[],

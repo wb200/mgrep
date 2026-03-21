@@ -23,6 +23,111 @@ export interface WatchOptions {
   maxFileCount?: number;
 }
 
+type WatchFactory = typeof fs.watch;
+
+let watchFactory: WatchFactory = fs.watch;
+const DEFAULT_POLL_INTERVAL_MS = 10_000;
+let pollingIntervalMs = DEFAULT_POLL_INTERVAL_MS;
+
+function formatPollingInterval(intervalMs: number): string {
+  if (intervalMs % 1000 === 0) {
+    return `${intervalMs / 1000}s`;
+  }
+  return `${intervalMs}ms`;
+}
+
+function isEnospcError(
+  error: unknown,
+): error is Error & { code: "ENOSPC" | string } {
+  return error instanceof Error && "code" in error && error.code === "ENOSPC";
+}
+
+function reportWatchError(error: unknown, watchRoot: string): void {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error("Watcher failed:", message);
+
+  if (isEnospcError(error)) {
+    console.error(
+      `The OS file watcher limit was reached while watching ${watchRoot}.`,
+    );
+  }
+
+  console.error(
+    "Try watching a narrower directory, add excludes via .mgrepignore or blockedPaths, or raise fs.inotify.max_user_watches/fs.inotify.max_user_instances.",
+  );
+}
+
+function reportPollingFailure(error: unknown): void {
+  if (error instanceof MaxFileCountExceededError) {
+    console.error(`\n❌ ${error.message}`);
+    console.error(
+      "   Increase the limit with --max-file-count or MGREP_MAX_FILE_COUNT environment variable.\n",
+    );
+    return;
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+  console.error("Polling sync failed:", message);
+}
+
+function startPollingFallback(
+  store: Awaited<ReturnType<typeof createStore>>,
+  fileSystem: ReturnType<typeof createFileSystem>,
+  options: WatchOptions,
+  watchRoot: string,
+  config: ReturnType<typeof loadConfig>,
+): void {
+  console.error(
+    `Falling back to polling every ${formatPollingInterval(pollingIntervalMs)}.`,
+  );
+  console.log("Polling for file changes in", watchRoot);
+
+  let pollingInProgress = false;
+  const runPollingSync = async () => {
+    if (pollingInProgress) {
+      return;
+    }
+
+    pollingInProgress = true;
+    try {
+      const result = await initialSync(
+        store,
+        fileSystem,
+        options.store,
+        watchRoot,
+        false,
+        undefined,
+        config,
+      );
+      if (result.uploaded > 0 || result.deleted > 0 || result.errors > 0) {
+        const deletedInfo =
+          result.deleted > 0 ? ` • deleted ${result.deleted}` : "";
+        const errorsInfo = result.errors > 0 ? ` • errors ${result.errors}` : "";
+        console.log(
+          `Polling sync complete (${result.processed}/${result.total}) • uploaded ${result.uploaded}${deletedInfo}${errorsInfo}`,
+        );
+      }
+    } catch (error) {
+      reportPollingFailure(error);
+    } finally {
+      pollingInProgress = false;
+    }
+  };
+
+  void runPollingSync();
+  setInterval(() => {
+    void runPollingSync();
+  }, pollingIntervalMs);
+}
+
+export function setWatchFactoryForTesting(factory?: WatchFactory): void {
+  watchFactory = factory ?? fs.watch;
+}
+
+export function setPollingIntervalMsForTesting(intervalMs?: number): void {
+  pollingIntervalMs = intervalMs ?? DEFAULT_POLL_INTERVAL_MS;
+}
+
 export async function startWatch(options: WatchOptions): Promise<void> {
   try {
     const watchRoot = process.cwd();
@@ -111,42 +216,75 @@ export async function startWatch(options: WatchOptions): Promise<void> {
 
     console.log("Watching for file changes in", watchRoot);
     fileSystem.loadMgrepignore(watchRoot);
-    fs.watch(watchRoot, { recursive: true }, (eventType, rawFilename) => {
-      const filename = rawFilename?.toString();
-      if (!filename) {
+    let watcherFailed = false;
+    const handleWatcherFailure = (error: unknown) => {
+      if (watcherFailed) {
         return;
       }
-      const filePath = path.join(watchRoot, filename);
-
-      if (fileSystem.isIgnored(filePath, watchRoot)) {
+      watcherFailed = true;
+      reportWatchError(error, watchRoot);
+      if (isEnospcError(error)) {
+        startPollingFallback(store, fileSystem, options, watchRoot, config);
         return;
       }
+      process.exitCode = 1;
+    };
 
-      try {
-        const stat = fs.statSync(filePath);
-        if (!stat.isFile()) {
-          return;
-        }
+    let watcher: fs.FSWatcher;
+    try {
+      watcher = watchFactory(
+        watchRoot,
+        { recursive: true },
+        (eventType, rawFilename) => {
+          const filename = rawFilename?.toString();
+          if (!filename) {
+            return;
+          }
+          const filePath = path.join(watchRoot, filename);
 
-        uploadFile(store, options.store, filePath, filename, config)
-          .then((didUpload) => {
-            if (didUpload) {
-              console.log(`${eventType}: ${filePath}`);
+          if (fileSystem.isIgnored(filePath, watchRoot)) {
+            return;
+          }
+
+          try {
+            const stat = fs.statSync(filePath);
+            if (!stat.isFile()) {
+              return;
             }
-          })
-          .catch((err) => {
-            console.error("Failed to upload changed file:", filePath, err);
-          });
+
+            uploadFile(store, options.store, filePath, filename, config)
+              .then((didUpload) => {
+                if (didUpload) {
+                  console.log(`${eventType}: ${filePath}`);
+                }
+              })
+              .catch((err) => {
+                console.error("Failed to upload changed file:", filePath, err);
+              });
+          } catch {
+            if (filePath.startsWith(watchRoot) && !fs.existsSync(filePath)) {
+              deleteFile(store, options.store, filePath)
+                .then(() => {
+                  console.log(`delete: ${filePath}`);
+                })
+                .catch((err) => {
+                  console.error("Failed to delete file:", filePath, err);
+                });
+            }
+          }
+        },
+      );
+    } catch (error) {
+      handleWatcherFailure(error);
+      return;
+    }
+
+    watcher.on("error", (error) => {
+      handleWatcherFailure(error);
+      try {
+        watcher.close();
       } catch {
-        if (filePath.startsWith(watchRoot) && !fs.existsSync(filePath)) {
-          deleteFile(store, options.store, filePath)
-            .then(() => {
-              console.log(`delete: ${filePath}`);
-            })
-            .catch((err) => {
-              console.error("Failed to delete file:", filePath, err);
-            });
-        }
+        // Ignore close errors after the watcher has already failed.
       }
     });
   } catch (error) {
